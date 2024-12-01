@@ -1028,43 +1028,64 @@ ${conversation?.use_previous_knowledge
       recentKnowledge.forEach((knowledge, index) => {
         const { conversation: conv, messages } = knowledge;
 
-        // Summarize the conversation
+        // Filter messages by role
         const userMessages = messages.filter(m => m.role === 'user');
         const assistantMessages = messages.filter(m => m.role === 'assistant');
 
         if (userMessages.length === 0) return;
 
-        // Create a summary of key topics discussed
-        const topics = userMessages
-          .map(m => m.content.substring(0, 100))
-          .join(' | ');
-
-        const lastInteraction = messages[messages.length - 1];
+        // Build detailed conversation exchanges (include full Q&A pairs)
+        const conversationExchanges: string[] = [];
+        
+        // Include up to 10 most recent message pairs to capture important details
+        const recentMessages = messages.slice(-20); // Last 20 messages (10 pairs)
+        
+        for (let i = 0; i < recentMessages.length; i++) {
+          const msg = recentMessages[i];
+          if (msg.role === 'user') {
+            const nextMsg = recentMessages[i + 1];
+            if (nextMsg && nextMsg.role === 'assistant') {
+              // Include full user question and assistant response
+              conversationExchanges.push(
+                `Q: ${msg.content}\nA: ${nextMsg.content.substring(0, 500)}${nextMsg.content.length > 500 ? '...' : ''}`
+              );
+              i++; // Skip the assistant message we just processed
+            } else {
+              // User message without response
+              conversationExchanges.push(`Q: ${msg.content}\nA: [No response recorded]`);
+            }
+          }
+        }
 
         const contextSection = `
 === Previous Conversation ${index + 1}: "${conv.title}" ===
 Date: ${new Date(conv.updated_at).toLocaleDateString()}
-Topics Discussed: ${topics}${topics.length > 200 ? '...' : ''}
-Messages: ${userMessages.length} questions, ${assistantMessages.length} responses
-Last Interaction: ${lastInteraction?.content.substring(0, 150)}${lastInteraction?.content.length > 150 ? '...' : ''}
+Total Messages: ${userMessages.length} questions, ${assistantMessages.length} responses
+
+Key Exchanges:
+${conversationExchanges.join('\n\n')}
+
 === End Previous Conversation ${index + 1} ===`;
 
         contextSections.push(contextSection);
       });
 
       const finalContext = `
-PREVIOUS KNOWLEDGE: You have access to the user's conversation history. Use this knowledge to provide more personalized and contextually aware responses:
+PREVIOUS KNOWLEDGE: You have access to the user's complete conversation history with detailed Q&A exchanges. Use ALL of this information to provide accurate, personalized responses:
 
 ${contextSections.join('\n\n')}
 
-Key Guidelines:
-1. Reference previous discussions when relevant
-2. Build upon past learning and insights  
-3. Maintain consistency with previous interactions
-4. Acknowledge when drawing from previous conversations
-5. Use this context to provide more personalized responses
+CRITICAL INSTRUCTIONS:
+1. READ AND USE ALL the information provided above - every question and answer
+2. When the user asks about something discussed before, reference the COMPLETE information from previous conversations
+3. If specific details (like numbers, names, lists) were mentioned, include ALL of them in your response
+4. Don't summarize or truncate information from previous conversations - be complete and accurate
+5. Always acknowledge when you're using information from previous conversations
+6. Maintain consistency with ALL past interactions
 
 Total Previous Conversations Available: ${previousKnowledge.length}
+
+Remember: The user expects you to remember EVERYTHING from previous conversations, not just summaries.
 `;
 
       console.log('✅ Built previous knowledge context with', contextSections.length, 'conversation summaries');
