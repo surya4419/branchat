@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ChatGPTMessageBubble } from './ChatGPTMessageBubble';
+import { BranChatMessageBubble } from './BranChatMessageBubble';
 import { Message } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -15,7 +15,7 @@ interface SubChatHistory {
   messages?: Message[];
 }
 
-interface ChatGPTMessageListProps {
+interface BranChatMessageListProps {
   messages: Message[];
   isLoading: boolean;
   onAskFollowUp: (messageId: string, selectedText?: string) => void;
@@ -25,7 +25,7 @@ interface ChatGPTMessageListProps {
   subChatHistories?: SubChatHistory[];
 }
 
-export function ChatGPTMessageList({
+export function BranChatMessageList({
   messages,
   isLoading,
   onAskFollowUp,
@@ -33,7 +33,7 @@ export function ChatGPTMessageList({
   onOpenExistingSubChat,
   onViewDetails,
   subChatHistories = []
-}: ChatGPTMessageListProps) {
+}: BranChatMessageListProps) {
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -60,7 +60,7 @@ export function ChatGPTMessageList({
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4">
         {Array.isArray(messages) && messages.map((message, index) => (
-          <ChatGPTMessageBubble
+          <BranChatMessageBubble
             key={message.id}
             message={message}
             onAskFollowUp={onAskFollowUp}
