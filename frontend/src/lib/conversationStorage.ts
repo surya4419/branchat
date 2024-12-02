@@ -98,14 +98,15 @@ export const conversationStorage = {
   },
 
   // Create a new conversation with previous knowledge option
-  async createConversation(title?: string, usePreviousKnowledge: boolean = false): Promise<Conversation | null> {
+  async createConversation(title?: string, usePreviousKnowledge: boolean = false, voiceInputEnabled: boolean = true): Promise<Conversation | null> {
     try {
       const response = await fetch(`${API_BASE_URL}/conversations`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ 
           title: title || 'New Conversation',
-          usePreviousKnowledge
+          usePreviousKnowledge,
+          voiceInputEnabled
         }),
       });
 
@@ -118,6 +119,7 @@ export const conversationStorage = {
             title: result.data.title,
             use_memory: false,
             use_previous_knowledge: usePreviousKnowledge,
+            voice_input_enabled: voiceInputEnabled,
             parent_conversation_id: null,
             parent_message_id: null,
             created_at: result.data.createdAt,
@@ -140,6 +142,7 @@ export const conversationStorage = {
         title: title || 'New Conversation',
         use_memory: false,
         use_previous_knowledge: usePreviousKnowledge,
+        voice_input_enabled: voiceInputEnabled,
         parent_conversation_id: null,
         parent_message_id: null,
         created_at: new Date().toISOString(),
@@ -184,6 +187,7 @@ export const conversationStorage = {
             title: conv.title,
             use_memory: false,
             use_previous_knowledge: conv.usePreviousKnowledge || false,
+            voice_input_enabled: conv.voiceInputEnabled ?? true,
             parent_conversation_id: null,
             parent_message_id: null,
             created_at: conv.createdAt,

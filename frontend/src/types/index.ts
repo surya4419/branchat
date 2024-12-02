@@ -11,6 +11,7 @@ export interface Conversation {
   title: string;
   use_memory: boolean;
   use_previous_knowledge: boolean;
+  voice_input_enabled: boolean;
   parent_conversation_id: string | null;
   parent_message_id: string | null;
   created_at: string;

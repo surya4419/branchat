@@ -68,6 +68,7 @@ import { subchatRoutes } from './routes/subchats.routes';
 import { memoryRoutes } from './routes/memory.routes';
 import { adminRoutes } from './routes/admin.routes';
 import { aiRoutes } from './routes/ai.routes';
+import { documentRoutes } from './routes/document.routes';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationRoutes);
@@ -75,6 +76,7 @@ app.use('/api/subchats', subchatRoutes);
 app.use('/api/memory', memoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/documents', documentRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
