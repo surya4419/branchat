@@ -1868,7 +1868,10 @@ The specific approach depends on your particular use case and constraints.`;
           <div className="flex items-center gap-3">
             {!user || user?.isGuest ? (
               <button
-                onClick={() => setShowLoginModal(true)}
+                onClick={() => {
+                  setRequireLogin(true);
+                  setShowLoginModal(true);
+                }}
                 className="bg-[#1a73e8] hover:bg-[#1557b0] text-white px-4 py-2 rounded-full font-medium text-sm transition-colors shadow-sm"
                 aria-label="Login"
               >
