@@ -95,9 +95,13 @@ export function BranChatMainView({
         setMessages([]);
       }
       
-      loadConversationWithMessages();
-      setSearchMessages([]);
-      loadSubChatHistories(conversationId);
+      // Load conversation and messages first, then SubChat histories
+      const loadData = async () => {
+        await loadConversationWithMessages();
+        setSearchMessages([]);
+        await loadSubChatHistories(conversationId);
+      };
+      loadData();
     } else {
       setMessages([]);
       setConversation(null);
@@ -113,7 +117,10 @@ export function BranChatMainView({
   // Reload SubChat histories when use_previous_knowledge setting changes
   useEffect(() => {
     if (conversationId && conversation) {
-      loadSubChatHistories(conversationId);
+      const reloadSubChats = async () => {
+        await loadSubChatHistories(conversationId);
+      };
+      reloadSubChats();
     }
   }, [conversation?.use_previous_knowledge]);
 
@@ -204,13 +211,19 @@ export function BranChatMainView({
 
         setConversation(loadedConversation);
 
-        // Filter out any subchat context messages that might have been accidentally saved
+        // Filter out any subchat context messages and SubChat summary system messages
         const filteredMessages = loadedMessages.filter((message: Message) => {
+          // Filter out SubChat summary system messages (these are converted to cards)
+          if (message.role === 'system' && message.content.includes('[SUBCHAT_SUMMARY]')) {
+            console.log('🔇 Filtering out SubChat summary system message (will be shown as card)');
+            return false;
+          }
+          
           // Filter out messages that look like subchat context
           if (message.content.includes('SUBCHAT CONTEXT:') ||
             message.content.includes('=== SubChat Context') ||
             message.content.includes('SELECTED TEXT TO DISCUSS')) {
-
+            console.log('🔇 Filtering out SubChat context message');
             return false;
           }
           return true;
@@ -254,83 +267,208 @@ export function BranChatMainView({
     }
   };
 
-  // Load persisted subchat histories for a conversation (USER-SPECIFIC HISTORIES ONLY)
-  const loadSubChatHistories = (conversationId: string) => {
+  // Load persisted subchat histories for a conversation from MongoDB
+  const loadSubChatHistories = async (conversationId: string) => {
     try {
-      // Get user ID for user-specific storage
-      const userId = user?.id || user?.email || 'guest';
-      if (!userId) {
-        console.error('❌ Cannot load subchat histories: No user ID available');
-        setMergedSubChatHistories([]);
-        return;
-      }
+      console.log('🔄 Loading SubChat histories from MongoDB for conversation:', conversationId);
       
-      let conversationHistories: typeof mergedSubChatHistories = [];
-      let globalHistories: typeof mergedSubChatHistories = [];
+      // Load messages for current conversation from MongoDB
+      const messages = await messageStorage.getMessages(conversationId);
       
-      // Always load conversation-specific histories (from current conversation)
-      const conversationStorageKey = `subchat_histories_${userId}_${conversationId}`;
-      const conversationStored = localStorage.getItem(conversationStorageKey);
+      // Extract SubChat summaries from system messages
+      const subChatSystemMessages = messages.filter(m => 
+        m.role === 'system' && m.content.includes('[SUBCHAT_SUMMARY]')
+      );
       
-      if (conversationStored) {
+      console.log(`📋 Found ${subChatSystemMessages.length} SubChat summaries in MongoDB`);
+      
+      const conversationHistories: typeof mergedSubChatHistories = [];
+      
+      subChatSystemMessages.forEach((msg, index) => {
         try {
-          const data = JSON.parse(conversationStored);
-          if (Array.isArray(data)) {
-            conversationHistories = data.filter(history => {
-              const hasRequiredFields = history.id && history.parentMessageId && history.mergedAt;
-              const mergedTime = new Date(history.mergedAt).getTime();
-              const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-              return hasRequiredFields && mergedTime > thirtyDaysAgo;
-            });
+          const content = msg.content;
+          
+          // Parse SubChat data from system message
+          const parentMessageIdMatch = content.match(/Parent Message ID: ([^\n]+)/);
+          const selectedTextMatch = content.match(/Selected Text: "([^"]+)"/);
+          const summaryMatch = content.match(/Summary: ([^\n]+)/);
+          const detailedMatch = content.match(/Detailed Summary: ([^\n]+(?:\n(?!Full Exchanges:|Question Count:|Merged At:)[^\n]+)*)/);
+          const fullExchangesMatch = content.match(/Full Exchanges:\n([\s\S]+?)(?=\nQuestion Count:|$)/);
+          const questionCountMatch = content.match(/Question Count: (\d+)/);
+          const mergedAtMatch = content.match(/Merged At: (.+?)$/m);
+          
+          const parentMessageId = parentMessageIdMatch ? parentMessageIdMatch[1] : '';
+          const selectedText = selectedTextMatch ? selectedTextMatch[1] : '';
+          const summary = summaryMatch ? summaryMatch[1] : 'Discussion occurred';
+          const detailedSummary = detailedMatch ? detailedMatch[1].trim() : summary;
+          const questionCount = questionCountMatch ? parseInt(questionCountMatch[1]) : 0;
+          const mergedAt = mergedAtMatch ? mergedAtMatch[1] : msg.created_at;
+          
+          // Only add if we have a valid parent message ID
+          if (!parentMessageId) {
+            console.warn(`⚠️ SubChat ${index + 1} missing parent message ID, skipping`);
+            return;
           }
-        } catch (parseError) {
-          // Silent error handling
-        }
-      }
-      
-      // Only load global subchat histories if use_previous_knowledge is enabled
-      if (conversation?.use_previous_knowledge) {
-        const globalStorageKey = `global_subchat_histories_${userId}`;
-        const globalStored = localStorage.getItem(globalStorageKey);
-        
-        if (globalStored) {
-          try {
-            const data = JSON.parse(globalStored);
-            if (Array.isArray(data)) {
-              globalHistories = data.filter(history => {
-                const hasRequiredFields = history.id && history.mergedAt;
-                const mergedTime = new Date(history.mergedAt).getTime();
-                const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-                return hasRequiredFields && mergedTime > thirtyDaysAgo;
+          
+          // Parse Full Exchanges back into Message objects
+          const subChatMessages: Message[] = [];
+          if (fullExchangesMatch) {
+            const exchangesText = fullExchangesMatch[1];
+            // Split by Q/A pattern
+            const qaPattern = /Q(\d+): ([\s\S]+?)\nA\1: ([\s\S]+?)(?=\n\nQ\d+:|$)/g;
+            let match;
+            
+            while ((match = qaPattern.exec(exchangesText)) !== null) {
+              const questionNum = match[1];
+              const question = match[2].trim();
+              const answer = match[3].trim();
+              
+              // Create user message
+              subChatMessages.push({
+                id: `subchat_${msg.id}_q${questionNum}`,
+                conversation_id: `subchat_${msg.id}`,
+                role: 'user',
+                content: question,
+                is_summary: false,
+                summary_details: null,
+                created_at: mergedAt
+              });
+              
+              // Create assistant message
+              subChatMessages.push({
+                id: `subchat_${msg.id}_a${questionNum}`,
+                conversation_id: `subchat_${msg.id}`,
+                role: 'assistant',
+                content: answer,
+                is_summary: false,
+                summary_details: null,
+                created_at: mergedAt
               });
             }
-          } catch (parseError) {
-            // Silent error handling
+            
+            console.log(`📝 Parsed ${subChatMessages.length} messages from SubChat ${index + 1}`);
           }
+          
+          // Create SubChat history object
+          const subChatHistory = {
+            id: `subchat_${msg.id}`,
+            parentMessageId, // Now using the actual parent message ID
+            selectedText,
+            summary,
+            detailedSummary,
+            questionCount,
+            topics: selectedText,
+            mergedAt,
+            messages: subChatMessages // Now includes the actual messages!
+          };
+          
+          conversationHistories.push(subChatHistory);
+          console.log(`✅ Loaded SubChat ${index + 1}:`, selectedText.substring(0, 50), '→ Parent:', parentMessageId.substring(0, 20), `→ ${subChatMessages.length} messages`);
+        } catch (parseError) {
+          console.error('❌ Error parsing SubChat summary:', parseError);
+        }
+      });
+      
+      // If use_previous_knowledge is enabled, also load from other conversations
+      let globalHistories: typeof mergedSubChatHistories = [];
+      if (conversation?.use_previous_knowledge) {
+        console.log('🌍 Loading SubChat histories from all conversations (previous knowledge enabled)');
+        
+        try {
+          const allConversations = await conversationStorage.getConversations();
+          
+          for (const conv of allConversations) {
+            if (conv.id === conversationId) continue; // Skip current conversation
+            
+            const convMessages = await messageStorage.getMessages(conv.id);
+            const convSubChats = convMessages.filter(m => 
+              m.role === 'system' && m.content.includes('[SUBCHAT_SUMMARY]')
+            );
+            
+            convSubChats.forEach((msg) => {
+              try {
+                const content = msg.content;
+                const parentMessageIdMatch = content.match(/Parent Message ID: ([^\n]+)/);
+                const selectedTextMatch = content.match(/Selected Text: "([^"]+)"/);
+                const summaryMatch = content.match(/Summary: ([^\n]+)/);
+                const detailedMatch = content.match(/Detailed Summary: ([^\n]+(?:\n(?!Full Exchanges:|Question Count:|Merged At:)[^\n]+)*)/);
+                const fullExchangesMatch = content.match(/Full Exchanges:\n([\s\S]+?)(?=\nQuestion Count:|$)/);
+                const mergedAtMatch = content.match(/Merged At: (.+?)$/m);
+                
+                const parentMessageId = parentMessageIdMatch ? parentMessageIdMatch[1] : '';
+                
+                // Only add if we have a valid parent message ID
+                if (!parentMessageId) {
+                  return;
+                }
+                
+                // Parse Full Exchanges back into Message objects
+                const subChatMessages: Message[] = [];
+                if (fullExchangesMatch) {
+                  const exchangesText = fullExchangesMatch[1];
+                  const qaPattern = /Q(\d+): ([\s\S]+?)\nA\1: ([\s\S]+?)(?=\n\nQ\d+:|$)/g;
+                  let match;
+                  
+                  while ((match = qaPattern.exec(exchangesText)) !== null) {
+                    const questionNum = match[1];
+                    const question = match[2].trim();
+                    const answer = match[3].trim();
+                    
+                    subChatMessages.push({
+                      id: `subchat_${msg.id}_q${questionNum}`,
+                      conversation_id: `subchat_${msg.id}`,
+                      role: 'user',
+                      content: question,
+                      is_summary: false,
+                      summary_details: null,
+                      created_at: mergedAtMatch ? mergedAtMatch[1] : msg.created_at
+                    });
+                    
+                    subChatMessages.push({
+                      id: `subchat_${msg.id}_a${questionNum}`,
+                      conversation_id: `subchat_${msg.id}`,
+                      role: 'assistant',
+                      content: answer,
+                      is_summary: false,
+                      summary_details: null,
+                      created_at: mergedAtMatch ? mergedAtMatch[1] : msg.created_at
+                    });
+                  }
+                }
+                
+                globalHistories.push({
+                  id: `subchat_${msg.id}`,
+                  parentMessageId,
+                  selectedText: selectedTextMatch ? selectedTextMatch[1] : '',
+                  summary: summaryMatch ? summaryMatch[1] : 'Discussion occurred',
+                  detailedSummary: detailedMatch ? detailedMatch[1].trim() : summaryMatch ? summaryMatch[1] : 'Discussion occurred',
+                  questionCount: 0,
+                  topics: selectedTextMatch ? selectedTextMatch[1] : '',
+                  mergedAt: mergedAtMatch ? mergedAtMatch[1] : msg.created_at,
+                  messages: subChatMessages
+                });
+              } catch (parseError) {
+                console.error('❌ Error parsing global SubChat:', parseError);
+              }
+            });
+          }
+          
+          console.log(`🌍 Loaded ${globalHistories.length} SubChat histories from other conversations`);
+        } catch (error) {
+          console.error('❌ Error loading global SubChat histories:', error);
         }
       }
       
-      // Combine conversation-specific and global histories (prioritize conversation-specific)
-      const combinedHistories = [...conversationHistories];
-      
-      // Add global histories that aren't already in conversation histories (only if use_previous_knowledge is enabled)
-      if (conversation?.use_previous_knowledge) {
-        globalHistories.forEach(globalHistory => {
-          const existsInConversation = conversationHistories.some(convHistory => convHistory.id === globalHistory.id);
-          if (!existsInConversation) {
-            combinedHistories.push(globalHistory);
-          }
-        });
-      }
-      
-      // Sort by merge date (most recent first) and limit to prevent overwhelming context
+      // Combine and sort
+      const combinedHistories = [...conversationHistories, ...globalHistories];
       combinedHistories.sort((a, b) => new Date(b.mergedAt).getTime() - new Date(a.mergedAt).getTime());
-      const limitedHistories = combinedHistories.slice(0, 20); // Limit to 20 most recent
+      const limitedHistories = combinedHistories.slice(0, 20);
       
+      console.log(`✅ Total SubChat histories loaded: ${limitedHistories.length}`);
       setMergedSubChatHistories(limitedHistories);
       
     } catch (error) {
-      console.error('❌ Error loading subchat histories:', error);
+      console.error('❌ Error loading subchat histories from MongoDB:', error);
       setMergedSubChatHistories([]);
     }
   };
@@ -1275,6 +1413,7 @@ Remember: The user expects you to remember EVERYTHING from previous conversation
         }).join('\n\n');
 
         const subChatSummaryMessage = `[SUBCHAT_SUMMARY]
+Parent Message ID: ${subChatParentMessageId}
 Selected Text: "${subChatSelectedText}"
 Summary: ${summary}
 Detailed Summary: ${detailedSummary}
@@ -1286,6 +1425,7 @@ Merged At: ${new Date().toISOString()}`;
         console.log('💾 Saving SubChat summary to MongoDB...');
         console.log('📝 Summary length:', subChatSummaryMessage.length, 'characters');
         console.log('📋 Selected text:', subChatSelectedText);
+        console.log('👪 Parent message ID:', subChatParentMessageId);
         console.log('💬 Question count:', userMessages.length);
 
         await messageStorage.addMessage(
