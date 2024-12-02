@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  requireLogin?: boolean;
 }
 
-export function LoginModal({ isOpen, onClose }: LoginModalProps) {
+export function LoginModal({ isOpen, onClose, requireLogin = false }: LoginModalProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,6 +57,10 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   };
 
   const handleClose = () => {
+    if (requireLogin) {
+      // Don't allow closing if login is required
+      return;
+    }
     resetForm();
     onClose();
   };
@@ -72,23 +77,25 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
       
       {/* Modal */}
       <div className="relative bg-white dark:bg-[#343541] rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-        {/* Close Button */}
-        <button
-          onClick={handleClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        {/* Close Button - hide if login is required */}
+        {!requireLogin && (
+          <button
+            onClick={handleClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
 
         {/* Header */}
         <div className="text-center mb-6">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-            {isSignUp ? 'Create your account' : 'Welcome back'}
+            {requireLogin ? 'Sign in required' : (isSignUp ? 'Create your account' : 'Welcome back')}
           </h2>
           <p className="text-gray-600 dark:text-gray-400">
-            {isSignUp ? 'Sign up to get started' : 'Sign in to continue'}
+            {requireLogin ? 'Please sign in or create an account to use branchat' : (isSignUp ? 'Sign up to get started' : 'Sign in to continue')}
           </p>
         </div>
 
@@ -164,14 +171,16 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleGuestMode}
-            disabled={guestLoading}
-            className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {guestLoading ? 'Loading...' : 'Continue as Guest'}
-          </button>
+          {!requireLogin && (
+            <button
+              type="button"
+              onClick={handleGuestMode}
+              disabled={guestLoading}
+              className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {guestLoading ? 'Loading...' : 'Continue as Guest'}
+            </button>
+          )}
 
           <div className="text-center">
             <button

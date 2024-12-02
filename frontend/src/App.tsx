@@ -5,18 +5,9 @@ import { BranChatLayout } from './components/Layout/BranChatLayout';
 import { Toast } from './components/Toast';
 
 function AppContent() {
-  const { user, loading, createGuestSession } = useAuth();
+  const { user, loading } = useAuth();
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
-
-  // Auto-login as guest if no user is logged in
-  useEffect(() => {
-    if (!loading && !user && !autoLoginAttempted) {
-      setAutoLoginAttempted(true);
-      createGuestSession();
-    }
-  }, [loading, user, autoLoginAttempted, createGuestSession]);
 
   // Reset conversation state and refresh when user changes (login/logout)
   useEffect(() => {
@@ -40,7 +31,7 @@ function AppContent() {
     }
   }, [user, loading]); // Detect user logout
 
-  if (loading || (!user && !autoLoginAttempted)) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-white dark:bg-[#1a1a1a] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-[#1a73e8]"></div>

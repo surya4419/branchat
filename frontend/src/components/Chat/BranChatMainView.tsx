@@ -41,6 +41,7 @@ export function BranChatMainView({
   const [isLoading, setIsLoading] = useState(false);
   const [searchMessages, setSearchMessages] = useState<Message[]>([]);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [requireLogin, setRequireLogin] = useState(false);
   const [showKnowledgeToggle, setShowKnowledgeToggle] = useState(false);
   const [pendingQuery, setPendingQuery] = useState<string>('');
   const [hasConversationHistory, setHasConversationHistory] = useState(false);
@@ -617,6 +618,13 @@ export function BranChatMainView({
   };
 
   const handleSendMessage = async (content: string) => {
+    // Check if user is guest or not logged in
+    if (!user || user.isGuest) {
+      setRequireLogin(true);
+      setShowLoginModal(true);
+      return;
+    }
+
     if (!conversationId) {
   
       return;
@@ -1520,6 +1528,13 @@ Merged At: ${new Date().toISOString()}`;
   };
 
   const handleSearchFocus = async () => {
+    // Check if user is guest or not logged in
+    if (!user || user.isGuest) {
+      setRequireLogin(true);
+      setShowLoginModal(true);
+      return;
+    }
+
     try {
       console.log('🔍 Search bar focused - showing knowledge toggle');
 
@@ -1553,6 +1568,13 @@ Merged At: ${new Date().toISOString()}`;
   };
 
   const handleSearchQuery = async (query: string): Promise<string> => {
+    // Check if user is guest or not logged in
+    if (!user || user.isGuest) {
+      setRequireLogin(true);
+      setShowLoginModal(true);
+      return '';
+    }
+
     try {
       console.log('🔍 Starting search query:', query);
 
@@ -1941,6 +1963,11 @@ The specific approach depends on your particular use case and constraints.`;
                     onAutoSendComplete={() => {
                       setFollowUpText('');
                     }}
+                    requireAuth={!user || user.isGuest}
+                    onAuthRequired={() => {
+                      setRequireLogin(true);
+                      setShowLoginModal(true);
+                    }}
                     placeholder={showKnowledgeToggle ? "Choose how to continue above..." : (selectedContext ? "Ask a question about the selected text..." : (messages.length > 0 ? (conversation?.use_previous_knowledge ? "Continue with full context + previous knowledge..." : (mergedSubChatHistories.length > 0 ? "Continue with full context + SubChat insights..." : "Continue the conversation (I remember everything)...")) : "Ask branchat"))}
                   />
                 </div>
@@ -1995,6 +2022,11 @@ The specific approach depends on your particular use case and constraints.`;
                   onAutoSendComplete={() => {
                     setFollowUpText('');
                   }}
+                  requireAuth={!user || user.isGuest}
+                  onAuthRequired={() => {
+                    setRequireLogin(true);
+                    setShowLoginModal(true);
+                  }}
                   isSearchMode={true}
                   placeholder={showKnowledgeToggle ? "Choose how to continue above..." : "Ask branchat"}
                 />
@@ -2019,7 +2051,11 @@ The specific approach depends on your particular use case and constraints.`;
         {/* Login Modal */}
         <LoginModal
           isOpen={showLoginModal}
-          onClose={() => setShowLoginModal(false)}
+          onClose={() => {
+            setShowLoginModal(false);
+            setRequireLogin(false);
+          }}
+          requireLogin={requireLogin}
         />
 
         {/* Settings Modals */}
