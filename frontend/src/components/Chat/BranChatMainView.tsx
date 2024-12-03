@@ -133,9 +133,11 @@ export function BranChatMainView({
         try {
           await handleSendMessage(pendingQuery);
           setPendingQuery('');
+          setFollowUpText(''); // Clear the input after sending voice query
         } catch (error) {
           console.error('Error sending pending message:', error);
           setPendingQuery('');
+          setFollowUpText(''); // Clear the input even on error
         }
       }, 200);
 

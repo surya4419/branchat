@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "validate": "ts-node -r tsconfig-paths/register src/scripts/validate-config.ts",
-    "validate:system": "ts-node -r tsconfig-paths/register src/scripts/validate_system.ts"
+    "validate:system": "ts-node -r tsconfig-paths/register src/scripts/validate_system.ts",
+    "fix:document-index": "ts-node -r tsconfig-paths/register src/scripts/fix-document-index.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.0",

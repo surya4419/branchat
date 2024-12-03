@@ -94,6 +94,9 @@ const documentSchema = new Schema<IDocument>({
 documentSchema.index({ conversationId: 1, createdAt: -1 });
 documentSchema.index({ userId: 1, conversationId: 1 });
 
+// Ensure no unique index on 'id' field (it's a virtual, not a real field)
+// This prevents the E11000 duplicate key error on id: null
+
 // Virtual for id
 documentSchema.virtual('id').get(function() {
   return this._id.toHexString();
