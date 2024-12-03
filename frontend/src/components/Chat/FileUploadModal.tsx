@@ -29,6 +29,11 @@ export function FileUploadModal({ isOpen, onClose, onUploadComplete, conversatio
       progress: 0
     }));
     setFiles(prev => [...prev, ...newFiles]);
+    
+    // Automatically trigger upload after files are added
+    setTimeout(() => {
+      setIsUploading(true);
+    }, 100);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -118,6 +123,13 @@ export function FileUploadModal({ isOpen, onClose, onUploadComplete, conversatio
     
     setIsUploading(false);
   };
+
+  // Auto-upload when files are added
+  useEffect(() => {
+    if (isUploading && files.some(f => f.status === 'pending')) {
+      handleUploadAll();
+    }
+  }, [isUploading]);
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
