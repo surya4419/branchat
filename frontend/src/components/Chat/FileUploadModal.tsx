@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { X, Upload, File, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import axios from 'axios';
@@ -100,6 +100,37 @@ export function FileUploadModal({ isOpen, onClose, onUploadComplete }: FileUploa
       ));
     }
   };
+
+  // Auto-upload files when they are added
+  useEffect(() => {
+    const pendingFiles = files.filter(f => f.status === 'pending');
+    
+    if (pendingFiles.length > 0 && !isUploading) {
+      setIsUploading(true);
+      
+      // Upload all pending files
+      const uploadPending = async () => {
+        for (let i = 0; i < files.length; i++) {
+          if (files[i].status === 'pending') {
+            await uploadFile(i);
+          }
+        }
+        setIsUploading(false);
+      };
+      
+      uploadPending();
+    }
+  }, [files.length]); // Trigger when new files are added
+
+  // Auto-close modal when all uploads are complete
+  useEffect(() => {
+    if (files.length > 0 && files.every(f => f.status === 'success')) {
+      // All files uploaded successfully, close modal after a short delay
+      setTimeout(() => {
+        handleClose();
+      }, 500);
+    }
+  }, [files]);
 
   const handleUploadAll = async () => {
     setIsUploading(true);
