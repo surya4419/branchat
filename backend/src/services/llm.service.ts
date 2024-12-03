@@ -86,13 +86,24 @@ export class GeminiProvider implements LLMProvider {
     try {
       const geminiMessages = this.convertMessagesToGemini(messages);
       
+      // Create a model instance with custom generation config if maxTokens is specified
+      const modelToUse = options.maxTokens 
+        ? this.client.getGenerativeModel({ 
+            model: config.gemini.model,
+            generationConfig: {
+              maxOutputTokens: options.maxTokens,
+              temperature: options.temperature ?? config.gemini.temperature,
+            }
+          })
+        : this.model;
+      
       // For single message, use generateContent
       if (geminiMessages.length === 1) {
         const messageText = geminiMessages[0].parts[0].text;
         if (!messageText) {
           throw new Error('Empty message content');
         }
-        const result = await this.model.generateContent(messageText);
+        const result = await modelToUse.generateContent(messageText);
         const response = await result.response;
         const content = response.text();
 
@@ -117,7 +128,7 @@ export class GeminiProvider implements LLMProvider {
       }
 
       // For conversation, use startChat
-      const chat = this.model.startChat({
+      const chat = modelToUse.startChat({
         history: geminiMessages.slice(0, -1),
       });
 

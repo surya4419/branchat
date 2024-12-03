@@ -16,6 +16,7 @@ interface BranChatComposerProps {
   onClearContext?: () => void;
   onFocus?: () => void;
   onVoiceStart?: () => void;
+  onUploadStart?: () => void;
   requireAuth?: boolean;
   onAuthRequired?: () => void;
   voiceInputEnabled?: boolean;
@@ -34,6 +35,7 @@ export function BranChatComposer({
   onClearContext,
   onFocus,
   onVoiceStart,
+  onUploadStart,
   requireAuth = false,
   onAuthRequired,
   voiceInputEnabled = false
@@ -168,6 +170,7 @@ export function BranChatComposer({
       if (attachedDocuments.length > 0) {
         const docNames = attachedDocuments.map(doc => doc.filename).join(', ');
         displayMessage = `${message.trim()}\n\n📎 Attached: ${docNames}`;
+        console.log('📤 Sending message with', attachedDocuments.length, 'attached document(s):', attachedDocuments);
       }
       
       // Combine selected context with display message if context exists
@@ -216,67 +219,37 @@ export function BranChatComposer({
       } else {
         // Handle regular message sending
         
-        // If documents are attached, use AI search endpoint for document-aware responses
-        if (attachedDocuments.length > 0 && onSearch) {
-          setIsSearching(true);
-          try {
-            // Use search endpoint with document context
-            const { documentApi } = await import('../../lib/documentApi');
-            const aiResponse = await documentApi.sendMessageWithDocuments(message.trim());
-            
-            // Clear everything
-            setMessage('');
-            onClearContext?.();
-            setAttachedDocuments([]);
-            
-            if (textareaRef.current) {
-              textareaRef.current.value = '';
-              textareaRef.current.style.height = 'auto';
-            }
-            
-            // Display the user message and AI response
-            onSend(displayMessage);
-            
-            // The AI response will be handled by the search callback
-            // For now, we'll just log it
-            console.log('AI Response:', aiResponse);
-            
-          } catch (error) {
-            console.error('Error sending message with documents:', error);
-          } finally {
-            setIsSearching(false);
-          }
-        } else {
-          // Regular message without documents
-          const messageToSend = displayMessage;
-          
-          // Store the sent message
-          setLastSentMessage(messageToSend);
-          
-          // Set flag to prevent initialValue from resetting the message
-          setShouldClearMessage(true);
-          
-          // Clear message BEFORE sending to prevent any race conditions
-          setMessage('');
-          onClearContext?.();
-          
-          // Clear attached documents after sending
-          setAttachedDocuments([]);
-          
-          // Force clear the textarea immediately
-          if (textareaRef.current) {
-            textareaRef.current.value = '';
-            textareaRef.current.style.height = 'auto';
-          }
-          
-          // Send the clean display message
-          onSend(messageToSend);
-          
-          // Reset the flag after a short delay
-          setTimeout(() => {
-            setShouldClearMessage(false);
-          }, 100);
+        // Note: Document context is handled automatically by the backend
+        // We just need to send the clean message
+        const messageToSend = displayMessage;
+        
+        // Store the sent message
+        setLastSentMessage(messageToSend);
+        
+        // Set flag to prevent initialValue from resetting the message
+        setShouldClearMessage(true);
+        
+        // Clear message BEFORE sending to prevent any race conditions
+        setMessage('');
+        onClearContext?.();
+        
+        // Clear attached documents after sending
+        setAttachedDocuments([]);
+        
+        // Force clear the textarea immediately
+        if (textareaRef.current) {
+          textareaRef.current.value = '';
+          textareaRef.current.style.height = 'auto';
         }
+        
+        // Send the clean display message
+        // Backend will automatically add document context if documents are uploaded
+        onSend(messageToSend);
+        
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          setShouldClearMessage(false);
+        }, 100);
       }
     }
   };
@@ -291,9 +264,13 @@ export function BranChatComposer({
   const canSend = message.trim().length > 0 && !disabled && !isSearching;
 
   const handleFileUploadComplete = (documentId: string, filename: string) => {
-    console.log('File uploaded:', documentId, filename);
+    console.log('✅ File uploaded successfully:', documentId, filename);
     // Add document to attached list
-    setAttachedDocuments(prev => [...prev, { id: documentId, filename }]);
+    setAttachedDocuments(prev => {
+      const updated = [...prev, { id: documentId, filename }];
+      console.log('📎 Attached documents:', updated);
+      return updated;
+    });
     // Close the upload modal
     setShowFileUpload(false);
   };
@@ -383,7 +360,14 @@ export function BranChatComposer({
               {/* Attachment button */}
               <button
                 type="button"
-                onClick={() => setShowFileUpload(true)}
+                onClick={() => {
+                  // If in search mode and no conversation, trigger knowledge toggle first
+                  if (isSearchMode && onUploadStart) {
+                    onUploadStart();
+                  } else {
+                    setShowFileUpload(true);
+                  }
+                }}
                 className="flex-shrink-0 p-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 disabled={disabled}
                 title="Upload documents"

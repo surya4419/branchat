@@ -172,6 +172,33 @@ export class DocumentController {
       });
     }
   }
+
+  /**
+   * Clear all documents for current user
+   */
+  async clear(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId || 'guest';
+
+      documentService.clearUserDocuments(userId);
+
+      res.json({
+        success: true,
+        message: 'All documents cleared successfully'
+      });
+
+    } catch (error) {
+      logger.error('Document clear failed', { 
+        error, 
+        userId: req.user?.userId 
+      });
+      
+      res.status(500).json({ 
+        error: 'Failed to clear documents',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
 }
 
 export const documentController = new DocumentController();
