@@ -348,26 +348,38 @@ Always maintain conversation continuity and provide responses that show you unde
           }
 
           // Add document context if user has uploaded documents
+          // IMPORTANT: Documents are now stored per conversation
+          // - Current conversation's documents are ALWAYS available
+          // - Other conversations' documents are ONLY available when usePreviousKnowledge is enabled
           try {
             const { documentService } = await import('../services/document.service');
-            const userDocs = documentService.getUserDocuments(userId);
             
-            if (userDocs.length > 0) {
-              logger.info('User has uploaded documents', { 
-                userId, 
-                documentCount: userDocs.length,
-                latestDoc: userDocs[userDocs.length - 1]?.filename 
-              });
-              
-              // Check if user is asking to answer questions from a document
-              const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(content);
+            // Get documents for THIS conversation
+            const conversationDocs = await documentService.getConversationDocuments(id);
+            
+            logger.info('Checking documents for conversation', { 
+              conversationId: id,
+              userId, 
+              conversationDocCount: conversationDocs.length,
+              usePreviousKnowledge: conversation.usePreviousKnowledge
+            });
+            
+            // Check if user is asking to answer questions from a document
+            // This takes priority over all other logic - always provide document context for explicit question answering
+            const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(content);
+            
+            // Check if this is the first message in the conversation
+            const isFirstMessage = conversation.messageCount === 1;
+            
+            if (conversationDocs.length > 0) {
+              // This conversation has documents uploaded
               
               if (isAnswerQuestionsRequest) {
-                // Get the full text from the most recent document
-                const latestDoc = userDocs[userDocs.length - 1];
+                // PRIORITY 1: User explicitly asking to answer questions - ALWAYS provide full document
+                const latestDoc = conversationDocs[conversationDocs.length - 1];
                 const documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
                 
-                logger.info('Adding full document context for question answering', {
+                logger.info('Adding full document context for question answering (explicit request)', {
                   filename: latestDoc.filename,
                   textLength: latestDoc.extractedText.length
                 });
@@ -397,47 +409,59 @@ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE:
 9. At the end, confirm: "I have answered all [X] questions from the document."
 
 The user expects you to answer EVERY question in the document in this single response.`;
-              } else {
-                // For the first message in a conversation, use the most recent document
-                // For subsequent messages, search across all documents
-                const isFirstMessage = conversation.messageCount === 1;
+              } else if (isFirstMessage) {
+                // PRIORITY 2: First message - always use the most recent document (just uploaded)
+                logger.info('First message - using most recent document from this conversation');
+                const latestDoc = conversationDocs[conversationDocs.length - 1];
+                const documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
                 
-                if (isFirstMessage) {
-                  // First message: Use the most recent document entirely
-                  logger.info('First message - using most recent document');
-                  const latestDoc = userDocs[userDocs.length - 1];
+                systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded a document "${latestDoc.filename}". Here is the complete content:\n\n${documentContext}\n\nIMPORTANT: This is the first message about this document. Provide a comprehensive response that addresses the user's question using the full document context.`;
+              } else {
+                // PRIORITY 3: Subsequent messages - search within THIS conversation's documents
+                logger.info('Searching documents in current conversation');
+                const relevantChunks = await documentService.searchDocuments(content, id, 5);
+                
+                logger.info('Document search completed', {
+                  query: content.substring(0, 100),
+                  chunksFound: relevantChunks.length
+                });
+                
+                if (relevantChunks.length > 0) {
+                  const documentContext = relevantChunks
+                    .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
+                    .join('\n\n---\n\n');
                   
-                  // Use full document text for first message to ensure complete context
-                  const documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
-                  
-                  systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded a document "${latestDoc.filename}". Here is the complete content:\n\n${documentContext}\n\nIMPORTANT: This is the first message about this document. Provide a comprehensive response that addresses the user's question using the full document context.`;
+                  systemPrompt += `\n\nDOCUMENT CONTEXT: Here is relevant content from your uploaded documents:\n\n${documentContext}\n\nUse this document context to provide more accurate and detailed answers.`;
                 } else {
-                  // Subsequent messages: Search for relevant chunks across all documents
-                  const relevantChunks = documentService.searchDocuments(content, userId, 5);
+                  // If no relevant chunks found, include the most recent document
+                  const latestDoc = conversationDocs[conversationDocs.length - 1];
+                  const preview = latestDoc.extractedText.substring(0, 2000);
                   
-                  logger.info('Document search completed', {
-                    query: content.substring(0, 100),
-                    chunksFound: relevantChunks.length
-                  });
-                  
-                  if (relevantChunks.length > 0) {
-                    const documentContext = relevantChunks
-                      .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
-                      .join('\n\n---\n\n');
-                    
-                    systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded documents. Here is relevant content:\n\n${documentContext}\n\nUse this document context to provide more accurate and detailed answers.`;
-                  } else {
-                    // If no relevant chunks found, include the most recent document
-                    logger.info('No relevant chunks found, including most recent document');
-                    const latestDoc = userDocs[userDocs.length - 1];
-                    const preview = latestDoc.extractedText.substring(0, 2000);
-                    
-                    systemPrompt += `\n\nDOCUMENT CONTEXT: The user has recently uploaded a document "${latestDoc.filename}". Here is a preview:\n\n${preview}${latestDoc.extractedText.length > 2000 ? '\n\n[Document continues...]' : ''}\n\nUse this document context to provide more accurate and detailed answers.`;
-                  }
+                  systemPrompt += `\n\nDOCUMENT CONTEXT: You have uploaded a document "${latestDoc.filename}". Here is a preview:\n\n${preview}${latestDoc.extractedText.length > 2000 ? '\n\n[Document continues...]' : ''}\n\nUse this document context to provide more accurate and detailed answers.`;
                 }
               }
+            } else if (conversation.usePreviousKnowledge) {
+              // PRIORITY 4: No documents in current conversation, but usePreviousKnowledge is enabled
+              // Search across ALL user's documents from other conversations
+              logger.info('No documents in current conversation - searching all user documents (usePreviousKnowledge enabled)');
+              const relevantChunks = await documentService.searchAllUserDocuments(content, userId, 5);
+              
+              if (relevantChunks.length > 0) {
+                logger.info('Found relevant chunks from previous conversations', {
+                  chunksFound: relevantChunks.length
+                });
+                
+                const documentContext = relevantChunks
+                  .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
+                  .join('\n\n---\n\n');
+                
+                systemPrompt += `\n\nDOCUMENT CONTEXT (from previous conversations): Here is relevant content from documents you've uploaded before:\n\n${documentContext}\n\nUse this document context to provide more accurate and detailed answers.`;
+              } else {
+                logger.info('No relevant documents found in previous conversations');
+              }
             } else {
-              logger.info('No documents uploaded by user', { userId });
+              // PRIORITY 5: No documents in current conversation and "Start Fresh" selected
+              logger.info('No documents in current conversation and usePreviousKnowledge is disabled (fresh chat)');
             }
           } catch (docError) {
             logger.warn('Failed to add document context', { error: docError });
