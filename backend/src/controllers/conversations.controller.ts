@@ -3,6 +3,7 @@ import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { llmService } from '../services/llm.service';
 import { memoryService } from '../services/memory.service';
+import { contextService } from '../services/context.service';
 import { logger } from '../utils/logger';
 import { ApiResponse, PaginationParams, PaginatedResponse, LLMMessage } from '../types';
 import mongoose from 'mongoose';
