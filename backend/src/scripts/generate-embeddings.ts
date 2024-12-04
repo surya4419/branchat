@@ -14,7 +14,7 @@ import { logger } from '../utils/logger';
 async function generateEmbeddingsForAllConversations() {
   try {
     // Connect to MongoDB
-    await mongoose.connect(config.mongodb.uri);
+    await mongoose.connect(config.database.uri);
     logger.info('Connected to MongoDB');
 
     // Get all conversations
