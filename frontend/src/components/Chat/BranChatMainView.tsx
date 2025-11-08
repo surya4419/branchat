@@ -1068,20 +1068,35 @@ ${conversation?.use_previous_knowledge
           subChatSystemMessages.forEach((msg, subIndex) => {
             // Parse the SubChat summary from the system message
             const content = msg.content;
-            const selectedTextMatch = content.match(/Selected Text: "(.+?)"/);
-            const summaryMatch = content.match(/Summary: (.+?)(?:\n|$)/);
-            const detailedMatch = content.match(/Detailed Summary: (.+?)(?:\n|$)/);
+            console.log(`📝 Parsing SubChat ${subIndex + 1}:`, content.substring(0, 200));
+            
+            // Use more flexible regex patterns to capture multi-line content
+            const selectedTextMatch = content.match(/Selected Text: "([^"]+)"/);
+            const summaryMatch = content.match(/Summary: ([^\n]+)/);
+            const detailedMatch = content.match(/Detailed Summary: ([^\n]+(?:\n(?!Full Exchanges:|Question Count:|Merged At:)[^\n]+)*)/);
+            const fullExchangesMatch = content.match(/Full Exchanges:\n([\s\S]+?)(?=\nQuestion Count:|$)/);
             
             const selectedText = selectedTextMatch ? selectedTextMatch[1] : 'General discussion';
             const summary = summaryMatch ? summaryMatch[1] : 'Discussion occurred';
-            const detailed = detailedMatch ? detailedMatch[1] : summary;
+            const detailed = detailedMatch ? detailedMatch[1].trim() : summary;
+            const fullExchanges = fullExchangesMatch ? fullExchangesMatch[1].trim() : '';
             
-            subChatContexts.push(
-              `SubChat ${subIndex + 1}: "${selectedText}"\n` +
+            console.log(`✅ Extracted - Text: "${selectedText}", Summary: "${summary.substring(0, 50)}..."`);
+            console.log(`📊 Full exchanges length: ${fullExchanges.length} characters`);
+            
+            // Include full Q&A exchanges for maximum context
+            let subChatContext = `SubChat ${subIndex + 1}: "${selectedText}"\n` +
               `Summary: ${summary}\n` +
-              `Details: ${detailed}`
-            );
+              `Detailed Discussion: ${detailed}`;
+            
+            if (fullExchanges) {
+              subChatContext += `\n\nComplete Q&A Exchanges:\n${fullExchanges}`;
+            }
+            
+            subChatContexts.push(subChatContext);
           });
+        } else {
+          console.log(`ℹ️ No SubChat summaries found in MongoDB for: ${conv.title}`);
         }
 
         let contextSection = `
@@ -1253,12 +1268,25 @@ Remember: The user expects you to remember EVERYTHING from previous conversation
 
       // CRITICAL: Save SubChat summary to MongoDB as a system message for cross-session persistence
       try {
+        // Build comprehensive SubChat summary with full Q&A exchanges
+        const fullExchanges = userMessages.map((q, i) => {
+          const answer = assistantMessages[i];
+          return `Q${i + 1}: ${q.content}\nA${i + 1}: ${answer ? answer.content : 'No response'}`;
+        }).join('\n\n');
+
         const subChatSummaryMessage = `[SUBCHAT_SUMMARY]
 Selected Text: "${subChatSelectedText}"
 Summary: ${summary}
 Detailed Summary: ${detailedSummary}
+Full Exchanges:
+${fullExchanges}
 Question Count: ${userMessages.length}
 Merged At: ${new Date().toISOString()}`;
+
+        console.log('💾 Saving SubChat summary to MongoDB...');
+        console.log('📝 Summary length:', subChatSummaryMessage.length, 'characters');
+        console.log('📋 Selected text:', subChatSelectedText);
+        console.log('💬 Question count:', userMessages.length);
 
         await messageStorage.addMessage(
           conversationId,
@@ -1266,7 +1294,7 @@ Merged At: ${new Date().toISOString()}`;
           'system'
         );
         
-        console.log('✅ Saved SubChat summary to MongoDB for cross-session persistence');
+        console.log('✅ Successfully saved SubChat summary to MongoDB for cross-session persistence');
       } catch (error) {
         console.error('❌ Failed to save SubChat summary to MongoDB:', error);
         // Continue anyway - localStorage backup is still available
