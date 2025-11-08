@@ -211,7 +211,12 @@ export const conversationStorage = {
     messages: Message[];
   }>> {
     try {
+      console.log('🧠 Loading previous knowledge, excluding:', excludeConversationId);
+      
+      // Always fetch fresh data from backend to ensure we have latest conversations
       const conversations = await this.getConversations();
+      console.log('📚 Found', conversations.length, 'total conversations');
+      
       const previousKnowledge: Array<{
         conversation: Conversation;
         messages: Message[];
@@ -219,10 +224,15 @@ export const conversationStorage = {
 
       for (const conversation of conversations) {
         // Skip the current conversation
-        if (conversation.id === excludeConversationId) continue;
+        if (conversation.id === excludeConversationId) {
+          console.log('⏭️ Skipping current conversation:', conversation.title);
+          continue;
+        }
         
-        // Get messages for this conversation
+        // Always fetch messages from backend to ensure we have latest data
+        console.log('📖 Loading messages for:', conversation.title);
         const messages = await messageStorage.getMessages(conversation.id);
+        console.log('💬 Loaded', messages.length, 'messages for:', conversation.title);
         
         // Only include conversations that have actual content
         if (messages.length > 0) {
@@ -233,10 +243,15 @@ export const conversationStorage = {
         }
       }
 
-      console.log('📚 Loaded previous knowledge from', previousKnowledge.length, 'conversations');
+      console.log('✅ Loaded previous knowledge from', previousKnowledge.length, 'conversations');
+      console.log('📊 Previous knowledge details:', previousKnowledge.map(pk => ({
+        title: pk.conversation.title,
+        messageCount: pk.messages.length
+      })));
+      
       return previousKnowledge;
     } catch (error) {
-      console.error('Error loading previous knowledge:', error);
+      console.error('❌ Error loading previous knowledge:', error);
       return [];
     }
   },
@@ -333,6 +348,8 @@ export const messageStorage = {
   // Get messages for a specific conversation from backend
   async getMessages(conversationId: string): Promise<Message[]> {
     try {
+      console.log('📥 Fetching messages from backend for conversation:', conversationId);
+      
       const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}`, {
         headers: getAuthHeaders(),
       });
@@ -353,15 +370,21 @@ export const messageStorage = {
           // Cache in localStorage as fallback
           this.saveMessagesToStorage(conversationId, messages);
           
-          console.log('💬 Loaded messages from backend:', messages.length);
+          console.log('✅ Loaded', messages.length, 'messages from backend');
           return messages;
+        } else {
+          console.warn('⚠️ Backend response missing messages data:', result);
         }
+      } else {
+        console.warn('⚠️ Backend response not OK:', response.status, response.statusText);
       }
       
-      // Fallback to localStorage
+      // Fallback to localStorage only if backend fails
+      console.log('📦 Falling back to localStorage');
       return this.getMessagesFromStorage(conversationId);
     } catch (error) {
-      console.error('Error loading messages from backend:', error);
+      console.error('❌ Error loading messages from backend:', error);
+      console.log('📦 Falling back to localStorage');
       return this.getMessagesFromStorage(conversationId);
     }
   },

@@ -999,21 +999,22 @@ ${conversation?.use_previous_knowledge
 
   // Helper function to build previous knowledge context from all past conversations
   const buildPreviousKnowledgeContext = async (): Promise<string> => {
-
+    console.log('🧠 Building previous knowledge context...');
+    console.log('📊 Conversation use_previous_knowledge:', conversation?.use_previous_knowledge);
 
     if (!conversation?.use_previous_knowledge) {
-
+      console.log('⏭️ Skipping previous knowledge - not enabled for this conversation');
       return '';
     }
 
     try {
-
+      console.log('🔍 Fetching previous knowledge from all conversations...');
       const previousKnowledge = await conversationStorage.getAllPreviousKnowledge(conversationId);
 
-
+      console.log('📚 Retrieved', previousKnowledge.length, 'previous conversations');
 
       if (previousKnowledge.length === 0) {
-
+        console.log('📭 No previous knowledge available');
         return '';
       }
 
@@ -1066,11 +1067,12 @@ Key Guidelines:
 Total Previous Conversations Available: ${previousKnowledge.length}
 `;
 
-
+      console.log('✅ Built previous knowledge context with', contextSections.length, 'conversation summaries');
+      console.log('📝 Context length:', finalContext.length, 'characters');
 
       return finalContext;
     } catch (error) {
-      console.error('🧠 Error building previous knowledge context:', error);
+      console.error('❌ Error building previous knowledge context:', error);
       return '';
     }
   };
