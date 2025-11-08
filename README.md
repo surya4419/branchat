@@ -1,176 +1,247 @@
-# SubChat MVP
+# BranChat - Intelligent Conversational AI Platform
 
-A full-stack chat application with nested sub-conversations, intelligent memory management, and Chrome built-in AI integration.
+BranChat is a powerful full-stack chat application featuring nested sub-conversations (SubChats), intelligent context management, and seamless AI integration. Built with React and Node.js, BranChat offers a unique approach to managing complex conversations through branching discussions and smart memory features.
 
-## 🌟 Features
+## 🌟 Key Features
 
-- **Nested Sub-Conversations**: Create focused sub-tasks from main conversations
-- **Intelligent Memory**: Optional persistent memory using Elastic Search with semantic search
-- **Chrome Built-in AI**: Client-side AI processing when available, with server fallback
-- **Real-time Streaming**: Server-Sent Events for live AI responses
-- **Memory Toggle**: Control whether new conversations use past knowledge
-- **Guest Mode**: Demo functionality without account creation
-- **Merge & Summarize**: Consolidate sub-chat insights back into main conversations
+### 💬 Core Chat Features
+- **Intelligent Conversations**: Engage in natural, context-aware conversations with AI
+- **Real-time Responses**: Streaming AI responses for immediate feedback
+- **Conversation Management**: Create, rename, delete, and organize multiple conversations
+- **Dark Mode Support**: Beautiful UI with light and dark theme options
+- **Guest Mode**: Try the application without creating an account
+
+### 🌳 SubChat System
+- **Branching Conversations**: Create focused sub-discussions from any message
+- **Context Preservation**: SubChats maintain full context from parent conversations
+- **Text Selection**: Highlight specific text to create targeted SubChats
+- **Merge & Summarize**: Consolidate SubChat insights back into main conversations
+- **Read-Only Mode**: Review merged SubChats without editing
+- **Visual Indicators**: Clear UI showing active SubChats and merged summaries
+
+### 🧠 Smart Memory & Context
+- **Previous Knowledge Toggle**: Choose whether new conversations use past knowledge
+- **SubChat Context**: Automatically includes relevant SubChat discussions in responses
+- **Cross-Conversation Memory**: Access insights from previous conversations (when enabled)
+- **Context Indicators**: Visual badges showing active context and memory usage
+- **30-Day History**: Automatic cleanup of old SubChat histories
+
+### 🎨 User Experience
+- **Modern UI**: Clean, ChatGPT-inspired interface with smooth animations
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Keyboard Shortcuts**: Quick navigation and actions
+- **Search Functionality**: Find conversations quickly with built-in search
+- **Message Actions**: Copy, create SubChats, and ask follow-ups with ease
+- **Markdown Support**: Rich text formatting in messages
+
+### 🔐 Authentication & Security
+- **User Accounts**: Secure registration and login system
+- **Guest Sessions**: Unique guest IDs for demo functionality
+- **JWT Authentication**: Secure token-based authentication
+- **User Settings**: Profile management and preferences
+- **Account Security**: Password management and account deletion options
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │    Backend      │    │   External      │
-│   (React)       │    │  (Node.js)      │    │   Services      │
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ • Chat UI       │◄──►│ • REST API      │◄──►│ • MongoDB Atlas │
-│ • Sub-chat Pane │    │ • SSE Streaming │    │ • Elastic Search│
-│ • Memory Banner │    │ • Auth & Users  │    │ • Gemini API    │
-│ • Chrome AI     │    │ • Memory Mgmt   │    │ • Chrome AI     │
-│ • Settings      │    │ • Admin Tools   │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        BranChat                              │
+├─────────────────┬─────────────────┬─────────────────────────┤
+│   Frontend      │    Backend      │   External Services     │
+│   (React +      │  (Node.js +     │                         │
+│   TypeScript)   │   Express)      │                         │
+├─────────────────┼─────────────────┼─────────────────────────┤
+│ • Chat UI       │ • REST API      │ • MongoDB Atlas         │
+│ • SubChat Pane  │ • Authentication│ • Gemini API            │
+│ • Context Mgmt  │ • Conversations │ • Elastic Search (opt)  │
+│ • Memory Banner │ • Messages      │                         │
+│ • User Settings │ • SubChats      │                         │
+│ • Theme System  │ • Memory System │                         │
+└─────────────────┴─────────────────┴─────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- MongoDB (local or Atlas)
-- Elastic Search (optional, for memory features)
-- Gemini API key
+Before you begin, ensure you have the following installed:
+- **Node.js** 18+ and npm
+- **MongoDB** (local installation or MongoDB Atlas account)
+- **Gemini API Key** (from Google AI Studio)
+- **Elastic Search** (optional, for advanced memory features)
 
-### 1. Clone and Install
+### Installation
+
+#### 1. Clone the Repository
 
 ```bash
 git clone <repository-url>
-cd subchat-mvp
-
-# Install backend dependencies
-cd backend
-npm install
-
-# Install frontend dependencies
-cd ../frontend
-npm install
+cd branchat
 ```
 
-### 2. Environment Setup
+#### 2. Backend Setup
 
 ```bash
-# Backend configuration
+# Navigate to backend directory
 cd backend
-cp .env.example .env
-# Edit .env with your actual values
 
-# Frontend configuration (if needed)
-cd ../frontend
+# Install dependencies
+npm install
+
+# Create environment file
 cp .env.example .env
 ```
 
-### 3. Start Services
+Edit `backend/.env` with your configuration:
 
 ```bash
-# Option A: Using Docker (recommended)
-cd backend
-docker-compose up -d  # Starts MongoDB + Elastic Search
-npm run dev           # Start backend server
+# Database Configuration
+MONGODB_URI=mongodb://localhost:27017/branchat
+# Or use MongoDB Atlas:
+# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/branchat
 
-# Option B: Local services
-# Start your local MongoDB and Elastic Search
+# Authentication
+JWT_SECRET=your-super-secret-jwt-key-change-this
+ALLOW_GUEST=true
+
+# AI Service
+GEMINI_API_KEY=your-gemini-api-key-here
+
+# Server Configuration
+PORT=3001
+NODE_ENV=development
+
+# Optional: Elastic Search for Advanced Memory
+ELASTIC_URL=http://localhost:9200
+ELASTIC_INDEX=branchat-memories
+```
+
+#### 3. Frontend Setup
+
+```bash
+# Navigate to frontend directory
+cd ../frontend
+
+# Install dependencies
+npm install
+
+# Create environment file (if needed)
+cp .env.example .env
+```
+
+Edit `frontend/.env`:
+
+```bash
+VITE_API_URL=http://localhost:3001
+```
+
+#### 4. Start the Application
+
+```bash
+# Ensure MongoDB is running locally
+# mongod --dbpath /path/to/data
+
+# Start backend
 cd backend
 npm run dev
 
-# Start frontend (in another terminal)
+# In a new terminal, start frontend
 cd frontend
 npm run dev
 ```
 
-### 4. Seed Demo Data (Optional)
+#### 5. Access the Application
 
-```bash
-cd backend
-npm run seed:demo
-```
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:3001
 
-### 5. Test the API
+### First Time Setup
 
-```bash
-cd backend
-npm run demo:flows
-```
+1. Open http://localhost:5173 in your browser
+2. The app will automatically create a guest session
+3. Start chatting immediately or sign up for a full account
+4. Try creating a SubChat by clicking the branch icon on any message
 
-## 📁 Project Structure
+## 🎯 How to Use BranChat
 
-```
-subchat-mvp/
-├── backend/                 # Node.js/Express API
-│   ├── src/
-│   │   ├── controllers/     # Request handlers
-│   │   ├── services/        # Business logic
-│   │   ├── models/          # Database schemas
-│   │   ├── routes/          # API routes
-│   │   ├── middleware/      # Auth, validation, etc.
-│   │   ├── scripts/         # Utilities and demos
-│   │   └── config/          # Configuration
-│   ├── docker-compose.yml   # Local development services
-│   ├── Dockerfile           # Container configuration
-│   └── openapi.yaml         # API documentation
-├── frontend/                # React application
-│   ├── app/                 # Next.js app router
-│   ├── components/          # React components
-│   ├── hooks/               # Custom React hooks
-│   ├── lib/                 # Utilities and API client
-│   └── types/               # TypeScript definitions
-└── .kiro/                   # Kiro specs and configuration
-    └── specs/subchat-mvp/   # Feature specifications
-```
+### Basic Chat Flow
+
+1. **Start a New Conversation**
+   - Click "New chat" in the sidebar
+   - Choose whether to use previous knowledge
+   - Start typing your message
+
+2. **Send Messages**
+   - Type your message in the composer
+   - Press Enter or click Send
+   - Watch the AI response stream in real-time
+
+3. **Manage Conversations**
+   - Rename: Click the three dots → Rename
+   - Delete: Click the three dots → Delete
+   - Search: Use the search bar to find conversations
+
+### Using SubChats
+
+SubChats are BranChat's unique feature for focused discussions:
+
+1. **Create a SubChat**
+   - Hover over any AI message
+   - Click the branch icon
+   - Or select specific text and click "Create sub chat"
+
+2. **Work in SubChat**
+   - Ask focused questions about the selected topic
+   - The SubChat maintains full context from the parent conversation
+   - Continue the discussion as long as needed
+
+3. **Merge SubChat**
+   - Click "Merge & Continue" when done
+   - BranChat generates a summary of the SubChat
+   - The summary is saved globally for future conversations
+   - Return to the main conversation with enhanced context
+
+4. **View Merged SubChats**
+   - Merged SubChats appear as cards under their parent message
+   - Click a card to reopen in read-only mode
+   - Click "Continue Chat" to resume the discussion
+
+### Memory & Context Features
+
+1. **Previous Knowledge Toggle**
+   - When starting a new chat, choose "Use Previous Knowledge"
+   - BranChat will include insights from past conversations
+   - Visual indicator shows when previous knowledge is active
+
+2. **SubChat Context**
+   - Merged SubChats are automatically included in future responses
+   - Context is stored for 30 days
+   - Works across all conversations (when previous knowledge is enabled)
+
+3. **Context Indicators**
+   - Blue badge: SubChat context active
+   - Purple badge: Previous knowledge active
+   - Hover to see details
 
 ## 🔧 Configuration
 
 ### Backend Environment Variables
 
-```bash
-# Database
-MONGODB_URI=mongodb://localhost:27017/subchat-mvp
-ELASTIC_URL=http://localhost:9200
-
-# Authentication
-JWT_SECRET=your-jwt-secret-here
-ALLOW_GUEST=true
-
-# AI Services
-GEMINI_API_KEY=your-gemini-key-here
-
-# Server
-PORT=3001
-NODE_ENV=development
-```
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `MONGODB_URI` | MongoDB connection string | Yes | - |
+| `JWT_SECRET` | Secret key for JWT tokens | Yes | - |
+| `GEMINI_API_KEY` | Google Gemini API key | Yes | - |
+| `PORT` | Server port | No | 3001 |
+| `NODE_ENV` | Environment (development/production) | No | development |
+| `ALLOW_GUEST` | Enable guest mode | No | true |
+| `ELASTIC_URL` | Elastic Search URL (optional) | No | - |
 
 ### Frontend Environment Variables
 
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:3001
-```
-
-## 🎯 Key User Flows
-
-### 1. Basic Chat Flow
-
-1. **Start New Chat**: Choose "Use Past Knowledge" or "Start Fresh"
-2. **Send Message**: Type and send your message
-3. **Receive Response**: Get streaming AI response
-4. **Continue Conversation**: Build on the discussion
-
-### 2. Sub-Chat Flow
-
-1. **Create Sub-Chat**: Hover over message → "Create sub-task"
-2. **Focus Discussion**: Work on specific sub-topic
-3. **Merge Results**: Click "Merge & Continue" when done
-4. **Memory Storage**: Optionally save insights to memory
-
-### 3. Memory Management
-
-1. **Enable Memory**: Toggle in user settings
-2. **Automatic Learning**: System learns from merged sub-chats
-3. **Smart Retrieval**: New chats use relevant past knowledge
-4. **Manual Control**: Toggle individual memories on/off
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `VITE_API_URL` | Backend API URL | No | http://localhost:3001 |
 
 ## 🧪 Testing
 
@@ -182,229 +253,132 @@ cd backend
 # Run all tests
 npm test
 
-# Run specific test suites
-npm run test:watch
+# Run with coverage
+npm run test:coverage
 
-# Test individual components
-npm run test:mongo
-npm run test:elastic
-npm run test:auth
-npm run test:subchats
-npm run test:admin
-```
-
-### Integration Tests
-
-```bash
-# Test complete user flows
-npm run demo:flows
-
-# Test specific flows
-npm run demo:flows -- --flow=auth
-npm run demo:flows -- --flow=subchat
-npm run demo:flows -- --flow=memory
+# Run specific test file
+npm test -- conversations.test.ts
 ```
 
 ### Frontend Tests
 
 ```bash
 cd frontend
+
+# Run tests
 npm test
+
+# Run with coverage
+npm run test:coverage
+```
+
+### Manual Testing
+
+```bash
+# Test API endpoints
+cd backend
+npm run demo:flows
+
+# Test specific features
+curl http://localhost:3001/api/health
 ```
 
 ## 🚢 Deployment
 
-### Local Development
+### Production Build
 
+**Backend:**
 ```bash
-# Using Docker Compose
 cd backend
-docker-compose up -d
-npm run dev
-
-# Manual setup
-# 1. Start MongoDB and Elastic Search
-# 2. Configure environment variables
-# 3. Run: npm run dev
+npm run build
+npm start
 ```
 
-### Production (Google Cloud Run)
-
+**Frontend:**
 ```bash
-# Build and deploy
-cd backend
-./scripts/deploy-cloudrun.sh
-
-# Or using gcloud directly
-gcloud run deploy subchat-mvp \
-  --source . \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated
+cd frontend
+npm run build
+npm run preview
 ```
 
-See [DEPLOYMENT.md](backend/DEPLOYMENT.md) for detailed deployment instructions.
-
-## 📚 API Documentation
-
-### Interactive Documentation
-
-- **Swagger UI**: `http://localhost:3001/api-docs` (when server is running)
-- **OpenAPI Spec**: [backend/openapi.yaml](backend/openapi.yaml)
-- **Postman Collection**: [backend/postman_collection.json](backend/postman_collection.json)
-
-### Key Endpoints
-
-```bash
-# Authentication
-POST /api/auth/register
-POST /api/auth/login
-GET  /api/auth/profile
-
-# Conversations
-GET    /api/conversations
-POST   /api/conversations
-GET    /api/conversations/:id
-POST   /api/conversations/:id/messages
-POST   /api/conversations/start
-
-# Sub-Chats
-POST   /api/subchats
-GET    /api/subchats/:id
-POST   /api/subchats/:id/messages
-GET    /api/subchats/:id/stream
-POST   /api/subchats/:id/merge
-
-# Memory
-GET    /api/memory/list
-POST   /api/memory/retrieve
-DELETE /api/memory/:id
-
-# Admin
-GET    /api/admin/usage
-POST   /api/admin/memory/cleanup
-```
-
-## 🎨 Chrome Built-in AI Integration
-
-The application automatically detects and uses Chrome's built-in AI APIs when available:
-
-```javascript
-// Automatic detection
-const hasAI = await window.ai?.canCreateTextSession();
-
-// Client-side processing
-if (hasAI) {
-  const session = await window.ai.createTextSession();
-  const result = await session.prompt("Summarize this text...");
-} else {
-  // Fallback to server API
-  const result = await fetch('/api/llm/summarize', { ... });
-}
-```
-
-## 🧠 Memory System
-
-### How It Works
-
-1. **Sub-Chat Resolution**: When sub-chats are merged, summaries are generated
-2. **Memory Storage**: Summaries stored in Elastic Search with vector embeddings
-3. **Smart Retrieval**: New conversations retrieve relevant past knowledge
-4. **User Control**: Users can opt-in/out and toggle individual memories
-
-### Memory Structure
-
-```typescript
-interface Memory {
-  title: string;
-  content: string;
-  keywords: string[];
-  embedding: number[];  // Vector for semantic search
-  conversationId: string;
-  subchatId: string;
-  createdAt: Date;
-}
-```
-
-## 🔍 Troubleshooting
+## � TProubleshooting
 
 ### Common Issues
 
-1. **MongoDB Connection Failed**
-   ```bash
-   # Check if MongoDB is running
-   docker ps | grep mongo
-   # Or start with Docker
-   docker-compose up -d mongodb
-   ```
+**1. MongoDB Connection Error**
+```bash
+# Check if MongoDB is running
+mongosh
 
-2. **Elastic Search Not Available**
-   ```bash
-   # Memory features will fallback to text search
-   # Start Elastic Search:
-   docker-compose up -d elasticsearch
-   ```
+# Start MongoDB if not running
+mongod --dbpath /path/to/data
+```
 
-3. **Gemini API Errors**
-   ```bash
-   # Check your API key in .env
-   # Verify account has credits
-   # Check rate limits
-   ```
+**2. Gemini API Errors**
+- Verify your API key in `.env`
+- Check API quota at https://makersuite.google.com/
+- Ensure billing is enabled for your Google Cloud project
 
-4. **Chrome AI Not Working**
-   ```bash
-   # Ensure Chrome version 127+
-   # Enable chrome://flags/#optimization-guide-on-device-model
-   # Fallback to server API is automatic
-   ```
+**3. Port Already in Use**
+```bash
+# Kill process on port 3001 (backend)
+# Windows:
+netstat -ano | findstr :3001
+taskkill /PID <PID> /F
+
+# Linux/Mac:
+lsof -ti:3001 | xargs kill -9
+```
+
+**4. Frontend Can't Connect to Backend**
+- Verify backend is running on port 3001
+- Check `VITE_API_URL` in frontend `.env`
+- Ensure CORS is properly configured
+
+**5. SubChats Not Saving**
+- Check browser console for errors
+- Verify localStorage is enabled
+- Clear browser cache and try again
 
 ### Debug Mode
 
 ```bash
-# Backend debug logging
-DEBUG=subchat:* npm run dev
+# Backend with debug logs
+DEBUG=branchat:* npm run dev
 
-# Frontend debug mode
-NEXT_PUBLIC_DEBUG=true npm run dev
+# Frontend with verbose logging
+VITE_DEBUG=true npm run dev
 ```
 
 ## 🤝 Contributing
 
-1. **Fork the repository**
-2. **Create feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make changes and test**: `npm test`
-4. **Commit changes**: `git commit -m 'Add amazing feature'`
-5. **Push to branch**: `git push origin feature/amazing-feature`
-6. **Open Pull Request**
+We welcome contributions! Here's how to get started:
 
-### Development Guidelines
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and test thoroughly
+4. Commit with clear messages: `git commit -m 'Add amazing feature'`
+5. Push to your branch: `git push origin feature/amazing-feature`
+6. Open a Pull Request
 
-- Follow TypeScript best practices
-- Write tests for new features
-- Update documentation
-- Use conventional commit messages
-- Ensure all tests pass
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
 
-- **Google** for Gemini API
-- **Chrome Team** for built-in AI APIs
-- **Elastic** for search capabilities
-- **MongoDB** for database services
-- **Vercel** for Next.js framework
 
-## 📞 Support
+## 📞 Support & Contact
 
-- **Documentation**: Check the `/docs` folder
-- **Issues**: Open a GitHub issue
-- **Discussions**: Use GitHub Discussions
-- **Email**: [Add your contact email]
+- **Issues**: [GitHub Issues](https://github.com/surya4419/branchat/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/surya4419/branchat/discussions)
+- **Documentation**: Check the `/docs` folder for detailed guides
+- **Email**: suryaa4419@gmail.com
+
+
 
 ---
 
-**Built with ❤️ for the future of conversational AI**
+**Built with ❤️ by the BranChat Team**
+
+*Making conversations smarter, one branch at a time.*
