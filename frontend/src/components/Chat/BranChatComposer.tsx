@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, X, Quote } from 'lucide-react';
 
-interface ChatGPTComposerProps {
+interface BranChatComposerProps {
   onSend: (message: string) => void;
   onSearch?: (query: string) => Promise<string>;
   disabled?: boolean;
@@ -15,7 +15,7 @@ interface ChatGPTComposerProps {
   onFocus?: () => void;
 }
 
-export function ChatGPTComposer({ 
+export function BranChatComposer({ 
   onSend, 
   onSearch,
   disabled = false, 
@@ -27,7 +27,7 @@ export function ChatGPTComposer({
   selectedContext,
   onClearContext,
   onFocus
-}: ChatGPTComposerProps) {
+}: BranChatComposerProps) {
   const [message, setMessage] = useState(initialValue);
   const [isSearching, setIsSearching] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

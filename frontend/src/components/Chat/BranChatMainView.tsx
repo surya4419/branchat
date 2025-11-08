@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Menu, ChevronDown, User, LogOut } from 'lucide-react';
-import { ChatGPTMessageList } from './ChatGPTMessageList';
-import { ChatGPTComposer } from './ChatGPTComposer';
+import { BranChatMessageList } from './BranChatMessageList';
+import { BranChatComposer } from './BranChatComposer';
 
-import { ChatGPTSubChat } from './ChatGPTSubChat';
+import { BranChatSubChat } from './BranChatSubChat';
 import { MemoryBanner } from './MemoryBanner';
 import { LoginModal } from '../LoginModal';
 import { NewChatModal } from './NewChatModal';
@@ -17,7 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { conversationStorage, messageStorage } from '../../lib/conversationStorage';
 import { Message, Conversation, Summary } from '../../types';
 
-interface ChatGPTMainViewProps {
+interface BranChatMainViewProps {
   conversationId?: string;
   onConversationChange: () => void;
   onToggleLeftSidebar: () => void;
@@ -26,14 +26,14 @@ interface ChatGPTMainViewProps {
   onSwitchToConversation?: (id: string) => void;
 }
 
-export function ChatGPTMainView({
+export function BranChatMainView({
   conversationId,
   onConversationChange,
   onToggleLeftSidebar,
   justDeletedConversation = false,
   onNewChatRequest,
   onSwitchToConversation
-}: ChatGPTMainViewProps) {
+}: BranChatMainViewProps) {
   const { user, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -1655,7 +1655,7 @@ The specific approach depends on your particular use case and constraints.`;
               <>
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto bg-white dark:bg-[#1a1a1a]">
-                  <ChatGPTMessageList
+                  <BranChatMessageList
                     messages={messages}
                     isLoading={isLoading}
                     onAskFollowUp={handleAskFollowUp}
@@ -1681,7 +1681,7 @@ The specific approach depends on your particular use case and constraints.`;
 
                 {/* Composer at bottom */}
                 <div className="bg-white dark:bg-[#1a1a1a]">
-                  <ChatGPTComposer
+                  <BranChatComposer
                     onSend={(content) => {
                       if (conversationId) {
                         handleSendMessage(content);
@@ -1736,7 +1736,7 @@ The specific approach depends on your particular use case and constraints.`;
             {/* Centered Composer for welcome screen */}
             {!justDeletedConversation && (
               <div className="w-full max-w-3xl">
-                <ChatGPTComposer
+                <BranChatComposer
                   onSend={(content) => {
                     // This will be handled by search mode
                   }}
@@ -1759,7 +1759,7 @@ The specific approach depends on your particular use case and constraints.`;
             {/* Search Results */}
             {searchMessages.length > 0 && (
               <div className="w-full max-w-4xl mt-8">
-                <ChatGPTMessageList
+                <BranChatMessageList
                   messages={searchMessages}
                   isLoading={isLoading}
                   onAskFollowUp={() => { }}
@@ -1813,7 +1813,7 @@ The specific approach depends on your particular use case and constraints.`;
 
       {/* SubChat Overlay */}
       {subChatOpen && subChatParentMessage && (
-        <ChatGPTSubChat
+        <BranChatSubChat
           isOpen={subChatOpen}
           onClose={() => {
             setSubChatOpen(false);

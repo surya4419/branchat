@@ -3,7 +3,7 @@ import { Plus, MessageSquare, MoreHorizontal, Edit3, Trash2, Check, X, Search, M
 import { Conversation } from '../../types';
 import { conversationStorage } from '../../lib/conversationStorage';
 
-interface ChatGPTSidebarProps {
+interface BranChatSidebarProps {
   conversations: Conversation[];
   currentConversationId?: string;
   onSelectConversation: (id: string) => void;
@@ -14,7 +14,7 @@ interface ChatGPTSidebarProps {
   onToggleSidebar?: () => void;
 }
 
-export function ChatGPTSidebar({
+export function BranChatSidebar({
   conversations,
   currentConversationId,
   onSelectConversation,
@@ -23,7 +23,7 @@ export function ChatGPTSidebar({
   onCurrentConversationDeleted,
   isCollapsed = false,
   onToggleSidebar
-}: ChatGPTSidebarProps) {
+}: BranChatSidebarProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);

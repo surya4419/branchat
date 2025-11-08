@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { ChatGPTLayout } from './components/Layout/ChatGPTLayout';
+import { BranChatLayout } from './components/Layout/BranChatLayout';
 import { Toast } from './components/Toast';
 
 function AppContent() {
@@ -50,7 +50,7 @@ function AppContent() {
 
   return (
     <>
-      <ChatGPTLayout
+      <BranChatLayout
         currentConversationId={currentConversationId}
         onConversationChange={(id) => {
           console.log('🎯 App: Setting conversation ID:', id);

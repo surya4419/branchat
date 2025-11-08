@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronRight, Eye, CheckCircle, RotateCcw } from 'lucide-react';
-import { ChatGPTMessageList } from './ChatGPTMessageList';
-import { ChatGPTComposer } from './ChatGPTComposer';
+import { BranChatMessageList } from './BranChatMessageList';
+import { BranChatComposer } from './BranChatComposer';
 import { Message } from '../../types';
 
-interface ChatGPTSubChatProps {
+interface BranChatSubChatProps {
   isOpen: boolean;
   onClose: () => void;
   messages: Message[];
@@ -21,7 +21,7 @@ interface ChatGPTSubChatProps {
   mergedSummary?: string;
 }
 
-export function ChatGPTSubChat({
+export function BranChatSubChat({
   isOpen,
   onClose,
   messages,
@@ -36,7 +36,7 @@ export function ChatGPTSubChat({
   isMerging,
   isReadOnly = false,
   mergedSummary
-}: ChatGPTSubChatProps) {
+}: BranChatSubChatProps) {
   const [subChatTitle, setSubChatTitle] = useState('SubChat');
   const [showFullContext, setShowFullContext] = useState(false);
   const [followUpText, setFollowUpText] = useState('');
@@ -190,7 +190,7 @@ export function ChatGPTSubChat({
 
               {/* Messages List - Now below the scrollable context */}
               <div className="px-4 py-2">
-                <ChatGPTMessageList
+                <BranChatMessageList
                   messages={messages}
                   isLoading={isLoading}
                   onAskFollowUp={handleAskFollowUp}
@@ -238,7 +238,7 @@ export function ChatGPTSubChat({
           {/* Composer - Hidden in read-only mode */}
           {!isReadOnly && (
             <div className="bg-gray-50 dark:bg-gray-800">
-              <ChatGPTComposer
+              <BranChatComposer
                 onSend={(content) => {
                   onSendMessage(content);
                   handleClearContext(); // Clear context after sending

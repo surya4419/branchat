@@ -16,7 +16,7 @@ interface SubChatHistory {
   messages?: Message[];
 }
 
-interface ChatGPTMessageBubbleProps {
+interface BranChatMessageBubbleProps {
   message: Message;
   onAskFollowUp: (messageId: string, selectedText?: string) => void;
   onOpenSubChat: (messageId: string, selectedText?: string) => void;
@@ -26,7 +26,7 @@ interface ChatGPTMessageBubbleProps {
   subChatHistories?: SubChatHistory[];
 }
 
-export function ChatGPTMessageBubble({
+export function BranChatMessageBubble({
   message,
   onAskFollowUp,
   onOpenSubChat,
@@ -34,7 +34,7 @@ export function ChatGPTMessageBubble({
   onViewDetails,
   isLast = false,
   subChatHistories = []
-}: ChatGPTMessageBubbleProps) {
+}: BranChatMessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [showTextActions, setShowTextActions] = useState(false);

@@ -1,22 +1,22 @@
 import { useState, useEffect } from 'react';
-import { ChatGPTSidebar } from './ChatGPTSidebar';
-import { ChatGPTMainView } from '../Chat/ChatGPTMainView';
+import { BranChatSidebar } from './BranChatSidebar';
+import { BranChatMainView } from '../Chat/BranChatMainView';
 import { NewChatModal } from '../Chat/NewChatModal';
 import { DevToolbar } from '../DevToolbar';
 import { Toast } from '../Toast';
 import { Conversation } from '../../types';
 
-interface ChatGPTLayoutProps {
+interface BranChatLayoutProps {
   currentConversationId?: string;
   onConversationChange: (id?: string) => void;
   refreshKey: number;
 }
 
-export function ChatGPTLayout({
+export function BranChatLayout({
   currentConversationId,
   onConversationChange,
   refreshKey
-}: ChatGPTLayoutProps) {
+}: BranChatLayoutProps) {
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
@@ -89,7 +89,7 @@ export function ChatGPTLayout({
         <div className={`hidden md:block bg-white dark:bg-[#1a1a1a] flex-shrink-0 transition-all duration-200 ${
           isLeftSidebarCollapsed ? 'w-16' : 'w-[260px]'
         }`}>
-          <ChatGPTSidebar
+          <BranChatSidebar
             conversations={conversations}
             currentConversationId={currentConversationId}
             onSelectConversation={(id) => {
@@ -115,7 +115,7 @@ export function ChatGPTLayout({
       {showLeftSidebar && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setShowLeftSidebar(false)}>
           <div className="w-[260px] h-full bg-white dark:bg-[#1a1a1a] animate-in slide-in-from-left duration-200" onClick={(e) => e.stopPropagation()}>
-            <ChatGPTSidebar
+            <BranChatSidebar
               conversations={conversations}
               currentConversationId={currentConversationId}
               onSelectConversation={(id) => {
@@ -139,7 +139,7 @@ export function ChatGPTLayout({
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <ChatGPTMainView
+        <BranChatMainView
           conversationId={currentConversationId}
           onConversationChange={() => {
             // Only reload conversations if we have a current conversation
