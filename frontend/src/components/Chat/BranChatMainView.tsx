@@ -1057,15 +1057,48 @@ ${conversation?.use_previous_knowledge
           }
         }
 
-        const contextSection = `
+        // CRITICAL: Extract SubChat summaries from system messages (stored in MongoDB)
+        const subChatContexts: string[] = [];
+        const subChatSystemMessages = messages.filter(m => 
+          m.role === 'system' && m.content.includes('[SUBCHAT_SUMMARY]')
+        );
+        
+        if (subChatSystemMessages.length > 0) {
+          console.log(`📋 Found ${subChatSystemMessages.length} SubChat summaries in MongoDB for: ${conv.title}`);
+          subChatSystemMessages.forEach((msg, subIndex) => {
+            // Parse the SubChat summary from the system message
+            const content = msg.content;
+            const selectedTextMatch = content.match(/Selected Text: "(.+?)"/);
+            const summaryMatch = content.match(/Summary: (.+?)(?:\n|$)/);
+            const detailedMatch = content.match(/Detailed Summary: (.+?)(?:\n|$)/);
+            
+            const selectedText = selectedTextMatch ? selectedTextMatch[1] : 'General discussion';
+            const summary = summaryMatch ? summaryMatch[1] : 'Discussion occurred';
+            const detailed = detailedMatch ? detailedMatch[1] : summary;
+            
+            subChatContexts.push(
+              `SubChat ${subIndex + 1}: "${selectedText}"\n` +
+              `Summary: ${summary}\n` +
+              `Details: ${detailed}`
+            );
+          });
+        }
+
+        let contextSection = `
 === Previous Conversation ${index + 1}: "${conv.title}" ===
 Date: ${new Date(conv.updated_at).toLocaleDateString()}
 Total Messages: ${userMessages.length} questions, ${assistantMessages.length} responses
 
 Key Exchanges:
-${conversationExchanges.join('\n\n')}
+${conversationExchanges.join('\n\n')}`;
 
-=== End Previous Conversation ${index + 1} ===`;
+        // Add SubChat contexts if available
+        if (subChatContexts.length > 0) {
+          contextSection += `\n\nSubChat Discussions (${subChatContexts.length}):
+${subChatContexts.join('\n\n')}`;
+        }
+
+        contextSection += `\n=== End Previous Conversation ${index + 1} ===`;
 
         contextSections.push(contextSection);
       });
@@ -1217,6 +1250,27 @@ Remember: The user expects you to remember EVERYTHING from previous conversation
       setMergedSubChatHistories(updatedHistories);
       
       // Context is now immediately available
+
+      // CRITICAL: Save SubChat summary to MongoDB as a system message for cross-session persistence
+      try {
+        const subChatSummaryMessage = `[SUBCHAT_SUMMARY]
+Selected Text: "${subChatSelectedText}"
+Summary: ${summary}
+Detailed Summary: ${detailedSummary}
+Question Count: ${userMessages.length}
+Merged At: ${new Date().toISOString()}`;
+
+        await messageStorage.addMessage(
+          conversationId,
+          subChatSummaryMessage,
+          'system'
+        );
+        
+        console.log('✅ Saved SubChat summary to MongoDB for cross-session persistence');
+      } catch (error) {
+        console.error('❌ Failed to save SubChat summary to MongoDB:', error);
+        // Continue anyway - localStorage backup is still available
+      }
 
       // SubChat context saved successfully
       // Summary cards will be displayed automatically via subChatHistories prop
