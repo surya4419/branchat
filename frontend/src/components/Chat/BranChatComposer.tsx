@@ -13,6 +13,8 @@ interface BranChatComposerProps {
   selectedContext?: string;
   onClearContext?: () => void;
   onFocus?: () => void;
+  requireAuth?: boolean;
+  onAuthRequired?: () => void;
 }
 
 export function BranChatComposer({ 
@@ -26,7 +28,9 @@ export function BranChatComposer({
   onAutoSendComplete,
   selectedContext,
   onClearContext,
-  onFocus
+  onFocus,
+  requireAuth = false,
+  onAuthRequired
 }: BranChatComposerProps) {
   const [message, setMessage] = useState(initialValue);
   const [isSearching, setIsSearching] = useState(false);
@@ -89,6 +93,13 @@ export function BranChatComposer({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check if authentication is required
+    if (requireAuth && onAuthRequired) {
+      onAuthRequired();
+      return;
+    }
+    
     if (message.trim() && !disabled && !isSearching) {
       // Combine selected context with user's message if context exists
       const fullMessage = selectedContext 
@@ -174,8 +185,21 @@ export function BranChatComposer({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={onFocus}
-              placeholder={placeholder}
+              onFocus={(e) => {
+                if (requireAuth && onAuthRequired) {
+                  e.preventDefault();
+                  onAuthRequired();
+                } else {
+                  onFocus?.();
+                }
+              }}
+              onClick={(e) => {
+                if (requireAuth && onAuthRequired) {
+                  e.preventDefault();
+                  onAuthRequired();
+                }
+              }}
+              placeholder={requireAuth ? "Please sign in to use branchat" : placeholder}
               disabled={disabled}
               rows={1}
               className="flex-1 resize-none bg-transparent border-0 outline-none py-5 pr-2 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-lg leading-6 max-h-[200px] overflow-y-auto scrollbar-thin"
