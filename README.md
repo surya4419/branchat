@@ -26,6 +26,15 @@ BranChat is a powerful full-stack chat application featuring nested sub-conversa
 - **Context Indicators**: Visual badges showing active context and memory usage
 - **30-Day History**: Automatic cleanup of old SubChat histories
 
+### 📄 Document Upload & Text Extraction (NEW!)
+- **PDF Support**: Upload and extract text from PDF documents
+- **Image OCR**: Extract text from images using Tesseract.js
+- **Drag & Drop**: Easy file upload with progress tracking
+- **Document Search**: Keyword-based search across uploaded documents
+- **AI Integration**: Automatically enhance chat responses with document context
+- **Document Management**: View, organize, and delete uploaded documents
+- **Zero Cost**: No paid APIs required - all processing done locally
+
 ### 🎨 User Experience
 - **Modern UI**: Clean, ChatGPT-inspired interface with smooth animations
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
@@ -163,6 +172,44 @@ npm run dev
 4. Try creating a SubChat by clicking the branch icon on any message
 
 ## 🎯 How to Use BranChat
+
+### Document Upload & AI-Enhanced Chat
+
+BranChat now supports uploading documents to enhance your conversations:
+
+1. **Upload Documents**
+   - Click the paperclip icon (📎) in the chat composer
+   - Drag & drop PDF files or images (JPG, PNG, GIF, BMP)
+   - Maximum file size: 10MB
+   - Watch the upload progress and wait for processing
+
+2. **Automatic Text Extraction**
+   - PDFs: Text is extracted automatically
+   - Scanned PDFs: OCR is applied automatically
+   - Images: Text is extracted using OCR
+   - Processing time: 2-5 seconds per page
+
+3. **Document-Enhanced Responses**
+   - Ask questions related to your uploaded documents
+   - AI automatically searches your documents for relevant content
+   - Responses include context from your documents
+   - More accurate and detailed answers
+
+4. **Manage Documents**
+   - View all uploaded documents in the Document Panel
+   - See document metadata (filename, type, chunks, size)
+   - Delete documents you no longer need
+   - Refresh the list to see latest uploads
+
+**Quick Start:**
+- Upload a research paper or document
+- Ask: "What are the main findings?"
+- Get AI responses based on your document content
+
+**See detailed documentation:**
+- `QUICK_START.md` - Get started in 5 minutes
+- `DOCUMENT_UPLOAD_GUIDE.md` - Complete feature guide
+- `INTEGRATION_EXAMPLE.md` - UI integration options
 
 ### Basic Chat Flow
 

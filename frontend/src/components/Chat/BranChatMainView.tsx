@@ -1496,7 +1496,7 @@ Merged At: ${new Date().toISOString()}`;
       try {
         const { conversationStorage } = await import('../../lib/conversationStorage');
         const title = usePreviousKnowledge ? 'New Chat (Previous Knowledge)' : 'New Chat';
-        const newConversation = await conversationStorage.createConversation(title, usePreviousKnowledge);
+        const newConversation = await conversationStorage.createConversation(title, usePreviousKnowledge, true);
 
         if (newConversation) {
           console.log('✅ Created conversation with previous knowledge:', usePreviousKnowledge);
@@ -1956,6 +1956,7 @@ The specific approach depends on your particular use case and constraints.`;
                       if (conversationId) {
                         handleSendMessage(content);
                         handleClearContext(); // Clear context after sending
+                        setFollowUpText(''); // Clear follow-up text
                       }
                     }}
                     disabled={isLoading || showKnowledgeToggle}
@@ -1971,6 +1972,7 @@ The specific approach depends on your particular use case and constraints.`;
                       setRequireLogin(true);
                       setShowLoginModal(true);
                     }}
+                    voiceInputEnabled={conversation?.voice_input_enabled || false}
                     placeholder={showKnowledgeToggle ? "Choose how to continue above..." : (selectedContext ? "Ask a question about the selected text..." : (messages.length > 0 ? (conversation?.use_previous_knowledge ? "Continue with full context + previous knowledge..." : (mergedSubChatHistories.length > 0 ? "Continue with full context + SubChat insights..." : "Continue the conversation (I remember everything)...")) : "Ask branchat"))}
                   />
                 </div>
@@ -2017,6 +2019,7 @@ The specific approach depends on your particular use case and constraints.`;
                   }}
                   onSearch={handleSearchQuery}
                   onFocus={handleSearchFocus}
+                  onVoiceStart={handleSearchFocus}
                   disabled={isLoading || showKnowledgeToggle}
                   initialValue={followUpText}
                   selectedContext={selectedContext}
@@ -2030,6 +2033,7 @@ The specific approach depends on your particular use case and constraints.`;
                     setRequireLogin(true);
                     setShowLoginModal(true);
                   }}
+                  voiceInputEnabled={true}
                   isSearchMode={true}
                   placeholder={showKnowledgeToggle ? "Choose how to continue above..." : "Ask branchat"}
                 />

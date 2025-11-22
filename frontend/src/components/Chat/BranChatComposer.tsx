@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, X, Quote } from 'lucide-react';
+import { Send, Paperclip, X, Quote, Mic, MicOff } from 'lucide-react';
+import { useVoiceInput } from '../../hooks/useVoiceInput';
+import { FileUploadModal } from './FileUploadModal';
 
 interface BranChatComposerProps {
   onSend: (message: string) => void;
@@ -13,8 +15,10 @@ interface BranChatComposerProps {
   selectedContext?: string;
   onClearContext?: () => void;
   onFocus?: () => void;
+  onVoiceStart?: () => void;
   requireAuth?: boolean;
   onAuthRequired?: () => void;
+  voiceInputEnabled?: boolean;
 }
 
 export function BranChatComposer({ 
@@ -29,14 +33,53 @@ export function BranChatComposer({
   selectedContext,
   onClearContext,
   onFocus,
+  onVoiceStart,
   requireAuth = false,
-  onAuthRequired
+  onAuthRequired,
+  voiceInputEnabled = false
 }: BranChatComposerProps) {
   const [message, setMessage] = useState(initialValue);
   const [isSearching, setIsSearching] = useState(false);
+  const [voiceError, setVoiceError] = useState<string>('');
+  const [shouldClearMessage, setShouldClearMessage] = useState(false);
+  const [lastSentMessage, setLastSentMessage] = useState<string>('');
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [attachedDocuments, setAttachedDocuments] = useState<Array<{ id: string; filename: string }>>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Voice input hook - directly update message as user speaks
+  const { isRecording, startRecording, stopRecording } = useVoiceInput({
+    onTranscript: (text) => {
+      setMessage(text);
+      setVoiceError('');
+      
+      // Auto-adjust textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+      }
+    },
+    onError: (error) => {
+      setVoiceError(error);
+      setTimeout(() => setVoiceError(''), 3000);
+    }
+  });
+
+  // Handle microphone click - toggle recording
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
   useEffect(() => {
+    // Don't set message if we just cleared it
+    if (shouldClearMessage) {
+      return;
+    }
+    
     if (initialValue) {
       // If there's selected context, extract just the question part
       if (selectedContext && initialValue.includes('Question: ')) {
@@ -82,7 +125,7 @@ export function BranChatComposer({
         }
       }, 100);
     }
-  }, [initialValue, autoSend, isSearchMode, onSearch, onSend, onAutoSendComplete, selectedContext]);
+  }, [initialValue, autoSend, isSearchMode, onSearch, onSend, onAutoSendComplete, selectedContext, shouldClearMessage]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -91,8 +134,25 @@ export function BranChatComposer({
     }
   }, [message]);
 
+  // Effect to ensure message stays cleared after sending
+  useEffect(() => {
+    if (lastSentMessage && message === lastSentMessage) {
+      // If the message is the same as what we just sent, clear it again
+      setMessage('');
+      if (textareaRef.current) {
+        textareaRef.current.value = '';
+        textareaRef.current.style.height = 'auto';
+      }
+    }
+  }, [message, lastSentMessage]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Stop recording if active
+    if (isRecording) {
+      stopRecording();
+    }
     
     // Check if authentication is required
     if (requireAuth && onAuthRequired) {
@@ -101,18 +161,53 @@ export function BranChatComposer({
     }
     
     if (message.trim() && !disabled && !isSearching) {
-      // Combine selected context with user's message if context exists
-      const fullMessage = selectedContext 
-        ? `Regarding: "${selectedContext}"\n\nQuestion: ${message.trim()}`
-        : message.trim();
+      // Create display message (what user sees in chat)
+      let displayMessage = message.trim();
+      
+      // Add document reference to display message if documents attached
+      if (attachedDocuments.length > 0) {
+        const docNames = attachedDocuments.map(doc => doc.filename).join(', ');
+        displayMessage = `${message.trim()}\n\n📎 Attached: ${docNames}`;
+      }
+      
+      // Combine selected context with display message if context exists
+      if (selectedContext) {
+        displayMessage = `Regarding: "${selectedContext}"\n\nQuestion: ${displayMessage}`;
+      }
         
       if (isSearchMode && onSearch) {
         // Handle search mode
         setIsSearching(true);
         try {
-          await onSearch(fullMessage);
+          // For search mode, enhance with document context before sending to backend
+          let searchQuery = message.trim();
+          if (attachedDocuments.length > 0) {
+            try {
+              const { documentApi } = await import('../../lib/documentApi');
+              const relevantChunks = await documentApi.searchDocuments(message.trim(), 5);
+              
+              if (relevantChunks.length > 0) {
+                const documentContext = relevantChunks
+                  .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
+                  .join('\n\n---\n\n');
+                
+                searchQuery = `${message.trim()}\n\n--- Document Context ---\n${documentContext}`;
+              }
+            } catch (error) {
+              console.error('Error searching documents:', error);
+            }
+          }
+          
+          await onSearch(searchQuery);
+          // Clear message
           setMessage('');
           onClearContext?.();
+          setAttachedDocuments([]);
+          
+          // Force clear the textarea
+          if (textareaRef.current) {
+            textareaRef.current.value = '';
+          }
         } catch (error) {
           console.error('Search error:', error);
         } finally {
@@ -120,9 +215,68 @@ export function BranChatComposer({
         }
       } else {
         // Handle regular message sending
-        onSend(fullMessage);
-        setMessage('');
-        onClearContext?.();
+        
+        // If documents are attached, use AI search endpoint for document-aware responses
+        if (attachedDocuments.length > 0 && onSearch) {
+          setIsSearching(true);
+          try {
+            // Use search endpoint with document context
+            const { documentApi } = await import('../../lib/documentApi');
+            const aiResponse = await documentApi.sendMessageWithDocuments(message.trim());
+            
+            // Clear everything
+            setMessage('');
+            onClearContext?.();
+            setAttachedDocuments([]);
+            
+            if (textareaRef.current) {
+              textareaRef.current.value = '';
+              textareaRef.current.style.height = 'auto';
+            }
+            
+            // Display the user message and AI response
+            onSend(displayMessage);
+            
+            // The AI response will be handled by the search callback
+            // For now, we'll just log it
+            console.log('AI Response:', aiResponse);
+            
+          } catch (error) {
+            console.error('Error sending message with documents:', error);
+          } finally {
+            setIsSearching(false);
+          }
+        } else {
+          // Regular message without documents
+          const messageToSend = displayMessage;
+          
+          // Store the sent message
+          setLastSentMessage(messageToSend);
+          
+          // Set flag to prevent initialValue from resetting the message
+          setShouldClearMessage(true);
+          
+          // Clear message BEFORE sending to prevent any race conditions
+          setMessage('');
+          onClearContext?.();
+          
+          // Clear attached documents after sending
+          setAttachedDocuments([]);
+          
+          // Force clear the textarea immediately
+          if (textareaRef.current) {
+            textareaRef.current.value = '';
+            textareaRef.current.style.height = 'auto';
+          }
+          
+          // Send the clean display message
+          onSend(messageToSend);
+          
+          // Reset the flag after a short delay
+          setTimeout(() => {
+            setShouldClearMessage(false);
+          }, 100);
+        }
       }
     }
   };
@@ -136,9 +290,27 @@ export function BranChatComposer({
 
   const canSend = message.trim().length > 0 && !disabled && !isSearching;
 
+  const handleFileUploadComplete = (documentId: string, filename: string) => {
+    console.log('File uploaded:', documentId, filename);
+    // Add document to attached list
+    setAttachedDocuments(prev => [...prev, { id: documentId, filename }]);
+    // Close the upload modal
+    setShowFileUpload(false);
+  };
+
+  const removeAttachedDocument = (documentId: string) => {
+    setAttachedDocuments(prev => prev.filter(doc => doc.id !== documentId));
+  };
+
   return (
     <div className="p-6 bg-white dark:bg-[#1a1a1a]">
       <div className="max-w-3xl mx-auto">
+        {/* File Upload Modal */}
+        <FileUploadModal
+          isOpen={showFileUpload}
+          onClose={() => setShowFileUpload(false)}
+          onUploadComplete={handleFileUploadComplete}
+        />
         {/* Selected Context Display */}
         {selectedContext && (
           <div className="mb-3 bg-gray-50 dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-600 rounded-lg p-3">
@@ -169,18 +341,57 @@ export function BranChatComposer({
         )}
         
         <form onSubmit={handleSubmit} className="relative">
-          <div className="flex items-end bg-gray-50 dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-600 rounded-3xl shadow-sm focus-within:shadow-lg focus-within:border-gray-300 dark:focus-within:border-gray-500 transition-all">
-            {/* Attachment button */}
-            <button
-              type="button"
-              className="flex-shrink-0 p-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              disabled={disabled}
-            >
-              <Paperclip size={22} />
-            </button>
+          {/* Voice error message */}
+          {voiceError && (
+            <div className="absolute -top-12 left-0 right-0 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-2 rounded-lg">
+              {voiceError}
+            </div>
+          )}
+          
+          <div className="flex flex-col bg-gray-50 dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-600 rounded-3xl shadow-sm focus-within:shadow-lg focus-within:border-gray-300 dark:focus-within:border-gray-500 transition-all">
+            {/* Attached Documents Display - Inside the input area */}
+            {attachedDocuments.length > 0 && (
+              <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-600">
+                {attachedDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="inline-flex items-center gap-2 px-2 py-1.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-6 h-6 bg-red-500 rounded flex items-center justify-center flex-shrink-0">
+                        <Paperclip size={12} className="text-white" />
+                      </div>
+                      <span className="text-gray-900 dark:text-gray-100 font-medium max-w-[150px] truncate">
+                        {doc.filename}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachedDocument(doc.id)}
+                      className="p-0.5 hover:bg-red-100 dark:hover:bg-red-800 rounded transition-colors"
+                      title="Remove document"
+                    >
+                      <X size={12} className="text-gray-600 dark:text-gray-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Input row */}
+            <div className="flex items-end">
+              {/* Attachment button */}
+              <button
+                type="button"
+                onClick={() => setShowFileUpload(true)}
+                className="flex-shrink-0 p-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                disabled={disabled}
+                title="Upload documents"
+              >
+                <Paperclip size={22} />
+              </button>
 
-            {/* Text input */}
-            <textarea
+              <textarea
               ref={textareaRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -199,29 +410,57 @@ export function BranChatComposer({
                   onAuthRequired();
                 }
               }}
-              placeholder={requireAuth ? "Please sign in to use branchat" : placeholder}
+              placeholder={requireAuth ? "Please sign in to use branchat" : isRecording ? "Listening..." : placeholder}
               disabled={disabled}
               rows={1}
               className="flex-1 resize-none bg-transparent border-0 outline-none py-5 pr-2 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-lg leading-6 max-h-[200px] overflow-y-auto scrollbar-thin"
               style={{ minHeight: '32px' }}
             />
 
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={!canSend}
-              className={`flex-shrink-0 p-4 m-2 rounded-full transition-all ${
-                canSend
-                  ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white shadow-md hover:shadow-lg'
-                  : 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {isSearching ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send size={20} />
-              )}
-            </button>
+            {/* Voice input button - only show if enabled */}
+            {voiceInputEnabled && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  
+                  // If in search mode and not recording, trigger the knowledge toggle
+                  if (isSearchMode && !isRecording && onVoiceStart) {
+                    onVoiceStart();
+                    return;
+                  }
+                  
+                  handleMicClick();
+                }}
+                className={`flex-shrink-0 p-4 m-2 rounded-full transition-all ${
+                  isRecording
+                    ? 'text-red-500 dark:text-red-400 animate-pulse'
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                disabled={disabled || requireAuth}
+                title={isRecording ? 'Stop recording' : 'Start voice input'}
+              >
+                {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+            )}
+
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={!canSend}
+                className={`flex-shrink-0 p-4 m-2 rounded-full transition-all ${
+                  canSend
+                    ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white shadow-md hover:shadow-lg'
+                    : 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isSearching ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send size={20} />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Footer text */}

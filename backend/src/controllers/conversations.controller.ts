@@ -347,6 +347,53 @@ Always maintain conversation continuity and provide responses that show you unde
             systemPrompt += `\n\nPREVIOUS KNOWLEDGE CONTEXT: You have access to the user's previous conversations and interactions. This knowledge helps you provide more personalized and contextually aware responses:\n\n${previousKnowledgeContext}\n\nUse this previous knowledge to:\n1. Reference past discussions when relevant\n2. Build upon previous learning and insights\n3. Maintain consistency with past interactions\n4. Provide more personalized responses based on user's history\n\nAlways acknowledge when you're drawing from previous conversations to help the user understand the context.`;
           }
 
+          // Add document context if user has uploaded documents
+          try {
+            const { documentService } = await import('../services/document.service');
+            const userDocs = documentService.getUserDocuments(userId);
+            
+            if (userDocs.length > 0) {
+              // Check if user is asking to answer questions from a document
+              const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(content);
+              
+              if (isAnswerQuestionsRequest) {
+                // Get the full text from the most recent document
+                const latestDoc = userDocs[userDocs.length - 1];
+                const documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
+                
+                systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded a document and is asking you to answer questions from it.
+
+Document Content:
+${documentContext}
+
+IMPORTANT INSTRUCTIONS:
+1. The document contains QUESTIONS, not answers
+2. You must PROVIDE ANSWERS to these questions using your knowledge
+3. Identify all questions in the document
+4. Provide comprehensive, accurate answers to each question
+5. Format your response clearly with question numbers and detailed answers
+6. Use your AI knowledge to answer - don't just list the questions
+7. If a question is unclear, provide the best possible answer based on context
+
+The user expects you to ANSWER the questions, not just acknowledge them.`;
+              } else {
+                // Normal document search for context
+                const relevantChunks = documentService.searchDocuments(content, userId, 3);
+                
+                if (relevantChunks.length > 0) {
+                  const documentContext = relevantChunks
+                    .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
+                    .join('\n\n---\n\n');
+                  
+                  systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded documents. Here is relevant content:\n\n${documentContext}\n\nUse this document context to provide more accurate and detailed answers.`;
+                }
+              }
+            }
+          } catch (docError) {
+            logger.warn('Failed to add document context', { error: docError });
+            // Continue without document context
+          }
+
           // Prepend system message if not already present
           const messagesWithSystem: LLMMessage[] = contextMessages[0]?.role === 'system' 
             ? contextMessages 
@@ -354,7 +401,7 @@ Always maintain conversation continuity and provide responses that show you unde
 
           const llmResponse = await llmService.chatCompletion(messagesWithSystem, {
             temperature: 0.7,
-            maxTokens: 2000,
+            maxTokens: 4000, // Increased for document-based responses with multiple answers
           });
           const processingTime = Date.now() - startTime;
 

@@ -148,34 +148,93 @@ export class AIController {
    */
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { query } = req.body;
+      const { query, useDocuments = false } = req.body;
 
       if (!query) {
         res.status(400).json({ error: 'Query is required' });
         return;
       }
 
+      let enhancedQuery = query;
+      let documentContext = '';
+
+      // If document search is enabled, search for relevant chunks
+      if (useDocuments) {
+        try {
+          const { documentService } = await import('../services/document.service');
+          const userId = req.user?.userId || 'guest';
+          
+          // Check if user is asking to answer questions from a document
+          const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(query);
+          
+          if (isAnswerQuestionsRequest) {
+            // Get ALL document content (not just top 3 chunks)
+            const userDocs = documentService.getUserDocuments(userId);
+            
+            if (userDocs.length > 0) {
+              // Get the full text from the most recent document
+              const latestDoc = userDocs[userDocs.length - 1];
+              documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
+              
+              // Create a smart prompt that instructs AI to answer the questions
+              enhancedQuery = `The user has uploaded a document containing questions and is asking you to provide answers to those questions.
+
+Document Content:
+${documentContext}
+
+User Request: ${query}
+
+Instructions:
+1. Identify all questions in the document
+2. Provide comprehensive, accurate answers to each question
+3. Use your knowledge to answer these questions (the document only contains questions, not answers)
+4. Format your response clearly with question numbers and answers
+5. If a question is unclear, provide the best possible answer based on the context
+
+Please provide detailed answers to all the questions found in the document.`;
+            }
+          } else {
+            // Normal document search for context
+            const relevantChunks = documentService.searchDocuments(query, userId, 3);
+
+            if (relevantChunks.length > 0) {
+              documentContext = relevantChunks
+                .map((chunk, index) => 
+                  `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`
+                )
+                .join('\n\n---\n\n');
+
+              enhancedQuery = `${query}\n\n--- Relevant Document Context ---\n${documentContext}`;
+            }
+          }
+        } catch (docError) {
+          logger.warn('Document search failed, continuing without document context', { docError });
+        }
+      }
+
       // Generate AI response for the search query
       const response = await llmService.chatCompletion([
         { 
           role: 'system', 
-          content: 'You are a helpful AI assistant. Provide clear, concise, and accurate answers to user questions in plain text format. Do not use markdown formatting like **bold**, *italic*, # headers, or bullet points with *. Use simple text with line breaks for readability. If you don\'t know something, say so honestly.' 
+          content: 'You are a helpful AI assistant. Provide clear, concise, and accurate answers to user questions in plain text format. Do not use markdown formatting like **bold**, *italic*, # headers, or bullet points with *. Use simple text with line breaks for readability. If you don\'t know something, say so honestly. When document context is provided, use it to give more accurate and detailed answers. When asked to answer questions from a document, provide comprehensive answers using your knowledge.' 
         },
-        { role: 'user', content: query }
+        { role: 'user', content: enhancedQuery }
       ], {
         temperature: 0.7,
-        maxTokens: 1000
+        maxTokens: 4000 // Increased for longer responses with multiple answers
       });
 
       logger.info('AI search query successful', {
         userId: req.user?.userId,
         queryLength: query.length,
-        responseLength: response.length
+        responseLength: response.length,
+        usedDocuments: useDocuments && documentContext.length > 0
       });
 
       res.json({ 
         response,
         query,
+        usedDocuments: useDocuments && documentContext.length > 0,
         timestamp: new Date().toISOString()
       });
 
