@@ -48,5 +48,6 @@ router.post('/upload', upload.single('file'), documentController.upload);
 router.post('/search', documentController.search);
 router.get('/list', documentController.list);
 router.delete('/:documentId', documentController.delete);
+router.post('/clear', documentController.clear);
 
 export { router as documentRoutes };

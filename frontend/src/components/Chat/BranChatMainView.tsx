@@ -44,6 +44,7 @@ export function BranChatMainView({
   const [requireLogin, setRequireLogin] = useState(false);
   const [showKnowledgeToggle, setShowKnowledgeToggle] = useState(false);
   const [pendingQuery, setPendingQuery] = useState<string>('');
+  const [pendingAction, setPendingAction] = useState<'upload' | 'voice' | null>(null);
   const [hasConversationHistory, setHasConversationHistory] = useState(false);
   const [isCheckingHistory, setIsCheckingHistory] = useState(false);
 
@@ -1491,8 +1492,8 @@ Merged At: ${new Date().toISOString()}`;
   const handleKnowledgeToggleChoice = async (usePreviousKnowledge: boolean) => {
     setShowKnowledgeToggle(false);
 
-    if (!pendingQuery) {
-      // If no pending query, just create the conversation and wait for user input
+    if (!pendingQuery && !pendingAction) {
+      // If no pending query or action, just create the conversation and wait for user input
       try {
         const { conversationStorage } = await import('../../lib/conversationStorage');
         const title = usePreviousKnowledge ? 'New Chat (Previous Knowledge)' : 'New Chat';
@@ -1504,6 +1505,35 @@ Merged At: ${new Date().toISOString()}`;
         }
       } catch (error) {
         console.error('Error creating conversation:', error);
+      }
+      return;
+    }
+
+    // Handle pending upload action
+    if (pendingAction === 'upload') {
+      try {
+        const { conversationStorage } = await import('../../lib/conversationStorage');
+        const title = usePreviousKnowledge ? 'New Chat (Previous Knowledge)' : 'New Chat';
+        const newConversation = await conversationStorage.createConversation(title, usePreviousKnowledge, true);
+
+        if (newConversation) {
+          console.log('✅ Created conversation for upload with previous knowledge:', usePreviousKnowledge);
+          onSwitchToConversation?.(newConversation.id);
+          
+          // Trigger file upload modal after conversation is created
+          // We'll use a small delay to ensure the conversation is fully loaded
+          setTimeout(() => {
+            // Trigger the file upload modal through a ref or state
+            const uploadButton = document.querySelector('[title="Upload documents"]') as HTMLButtonElement;
+            if (uploadButton) {
+              uploadButton.click();
+            }
+          }, 300);
+        }
+      } catch (error) {
+        console.error('Error creating conversation for upload:', error);
+      } finally {
+        setPendingAction(null);
       }
       return;
     }
@@ -1562,6 +1592,46 @@ Merged At: ${new Date().toISOString()}`;
     } catch (error) {
       console.error('❌ Error checking conversation history:', error);
       setIsCheckingHistory(false);
+      // Show modal anyway since both options are always enabled
+      setShowKnowledgeToggle(true);
+    }
+  };
+
+  const handleUploadStart = async () => {
+    // Check if user is guest or not logged in
+    if (!user || user.isGuest) {
+      setRequireLogin(true);
+      setShowLoginModal(true);
+      return;
+    }
+
+    try {
+      console.log('📎 Upload button clicked - showing knowledge toggle');
+
+      // Set pending action to upload
+      setPendingAction('upload');
+
+      // Set checking state to prevent premature modal display
+      setIsCheckingHistory(true);
+
+      // Check conversation history for informational purposes and context
+      const { conversationStorage } = await import('../../lib/conversationStorage');
+      const conversations = await conversationStorage.getConversations();
+
+      console.log('📊 User has', conversations.length, 'existing conversations');
+
+      // Update conversation history state (for context, not for disabling)
+      const hasHistory = conversations.length > 0;
+      setHasConversationHistory(hasHistory);
+      setIsCheckingHistory(false);
+
+      // Show modal - both options are always enabled for all users
+      console.log('🤔 Showing knowledge toggle modal for upload (both options enabled)');
+      setShowKnowledgeToggle(true);
+    } catch (error) {
+      console.error('❌ Error checking conversation history:', error);
+      setIsCheckingHistory(false);
+      setPendingAction(null);
       // Show modal anyway since both options are always enabled
       setShowKnowledgeToggle(true);
     }
@@ -2020,6 +2090,7 @@ The specific approach depends on your particular use case and constraints.`;
                   onSearch={handleSearchQuery}
                   onFocus={handleSearchFocus}
                   onVoiceStart={handleSearchFocus}
+                  onUploadStart={handleUploadStart}
                   disabled={isLoading || showKnowledgeToggle}
                   initialValue={followUpText}
                   selectedContext={selectedContext}

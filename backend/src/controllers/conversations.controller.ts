@@ -353,6 +353,12 @@ Always maintain conversation continuity and provide responses that show you unde
             const userDocs = documentService.getUserDocuments(userId);
             
             if (userDocs.length > 0) {
+              logger.info('User has uploaded documents', { 
+                userId, 
+                documentCount: userDocs.length,
+                latestDoc: userDocs[userDocs.length - 1]?.filename 
+              });
+              
               // Check if user is asking to answer questions from a document
               const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(content);
               
@@ -361,33 +367,77 @@ Always maintain conversation continuity and provide responses that show you unde
                 const latestDoc = userDocs[userDocs.length - 1];
                 const documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
                 
-                systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded a document and is asking you to answer questions from it.
+                logger.info('Adding full document context for question answering', {
+                  filename: latestDoc.filename,
+                  textLength: latestDoc.extractedText.length
+                });
+                
+                systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded a document containing questions and is asking you to answer ALL of them.
 
 Document Content:
 ${documentContext}
 
-IMPORTANT INSTRUCTIONS:
-1. The document contains QUESTIONS, not answers
-2. You must PROVIDE ANSWERS to these questions using your knowledge
-3. Identify all questions in the document
-4. Provide comprehensive, accurate answers to each question
-5. Format your response clearly with question numbers and detailed answers
-6. Use your AI knowledge to answer - don't just list the questions
-7. If a question is unclear, provide the best possible answer based on context
+CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE:
+1. The document contains QUESTIONS that need ANSWERS
+2. You MUST identify and answer EVERY SINGLE QUESTION in the document
+3. Count the total number of questions first
+4. Answer ALL questions - do not stop until you've answered every single one
+5. Format your response as:
+   Question 1: [question text]
+   Answer: [your detailed answer]
+   
+   Question 2: [question text]
+   Answer: [your detailed answer]
+   
+   (continue for ALL questions)
 
-The user expects you to ANSWER the questions, not just acknowledge them.`;
+6. Use your AI knowledge to provide comprehensive, accurate answers
+7. Do NOT skip any questions - answer them all in one response
+8. If there are 20 questions, you must provide 20 answers
+9. At the end, confirm: "I have answered all [X] questions from the document."
+
+The user expects you to answer EVERY question in the document in this single response.`;
               } else {
-                // Normal document search for context
-                const relevantChunks = documentService.searchDocuments(content, userId, 3);
+                // For the first message in a conversation, use the most recent document
+                // For subsequent messages, search across all documents
+                const isFirstMessage = conversation.messageCount === 1;
                 
-                if (relevantChunks.length > 0) {
-                  const documentContext = relevantChunks
-                    .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
-                    .join('\n\n---\n\n');
+                if (isFirstMessage) {
+                  // First message: Use the most recent document entirely
+                  logger.info('First message - using most recent document');
+                  const latestDoc = userDocs[userDocs.length - 1];
                   
-                  systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded documents. Here is relevant content:\n\n${documentContext}\n\nUse this document context to provide more accurate and detailed answers.`;
+                  // Use full document text for first message to ensure complete context
+                  const documentContext = `[Document: ${latestDoc.filename}]\n${latestDoc.extractedText}`;
+                  
+                  systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded a document "${latestDoc.filename}". Here is the complete content:\n\n${documentContext}\n\nIMPORTANT: This is the first message about this document. Provide a comprehensive response that addresses the user's question using the full document context.`;
+                } else {
+                  // Subsequent messages: Search for relevant chunks across all documents
+                  const relevantChunks = documentService.searchDocuments(content, userId, 5);
+                  
+                  logger.info('Document search completed', {
+                    query: content.substring(0, 100),
+                    chunksFound: relevantChunks.length
+                  });
+                  
+                  if (relevantChunks.length > 0) {
+                    const documentContext = relevantChunks
+                      .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
+                      .join('\n\n---\n\n');
+                    
+                    systemPrompt += `\n\nDOCUMENT CONTEXT: The user has uploaded documents. Here is relevant content:\n\n${documentContext}\n\nUse this document context to provide more accurate and detailed answers.`;
+                  } else {
+                    // If no relevant chunks found, include the most recent document
+                    logger.info('No relevant chunks found, including most recent document');
+                    const latestDoc = userDocs[userDocs.length - 1];
+                    const preview = latestDoc.extractedText.substring(0, 2000);
+                    
+                    systemPrompt += `\n\nDOCUMENT CONTEXT: The user has recently uploaded a document "${latestDoc.filename}". Here is a preview:\n\n${preview}${latestDoc.extractedText.length > 2000 ? '\n\n[Document continues...]' : ''}\n\nUse this document context to provide more accurate and detailed answers.`;
+                  }
                 }
               }
+            } else {
+              logger.info('No documents uploaded by user', { userId });
             }
           } catch (docError) {
             logger.warn('Failed to add document context', { error: docError });
@@ -399,9 +449,13 @@ The user expects you to ANSWER the questions, not just acknowledge them.`;
             ? contextMessages 
             : [{ role: 'system', content: systemPrompt }, ...contextMessages];
 
+          // Determine max tokens based on whether we're answering questions from a document
+          const isAnsweringDocumentQuestions = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(content);
+          const maxTokens = isAnsweringDocumentQuestions ? 16000 : 4000; // Much higher limit for answering all questions
+          
           const llmResponse = await llmService.chatCompletion(messagesWithSystem, {
             temperature: 0.7,
-            maxTokens: 4000, // Increased for document-based responses with multiple answers
+            maxTokens,
           });
           const processingTime = Date.now() - startTime;
 

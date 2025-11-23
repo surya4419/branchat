@@ -168,6 +168,11 @@ class DocumentService {
         throw new Error('No text could be extracted from the file');
       }
 
+      // IMPORTANT: Clear old documents before adding new one
+      // This prevents document accumulation across uploads
+      logger.info('Clearing previous documents before adding new one', { userId });
+      this.clearUserDocuments(userId);
+
       // Chunk the text
       const textChunks = this.chunkText(extractedText, 1000);
       const documentId = uid.rnd();
@@ -196,10 +201,8 @@ class DocumentService {
       // Store document
       this.documentsStore.set(documentId, processedDoc);
 
-      // Associate with user
-      const userDocs = this.userDocuments.get(userId) || [];
-      userDocs.push(documentId);
-      this.userDocuments.set(userId, userDocs);
+      // Associate with user (now only this document)
+      this.userDocuments.set(userId, [documentId]);
 
       // Clean up uploaded file
       await fs.remove(filePath);
@@ -285,6 +288,23 @@ class DocumentService {
 
     logger.info('Document deleted', { documentId, userId });
     return true;
+  }
+
+  /**
+   * Clear all documents for a user
+   */
+  clearUserDocuments(userId: string): void {
+    const userDocs = this.userDocuments.get(userId) || [];
+    
+    // Remove all documents from store
+    userDocs.forEach(docId => {
+      this.documentsStore.delete(docId);
+    });
+    
+    // Clear user's document list
+    this.userDocuments.set(userId, []);
+    
+    logger.info('Cleared all documents for user', { userId, count: userDocs.length });
   }
 }
 
