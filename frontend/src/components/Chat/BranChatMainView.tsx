@@ -893,12 +893,42 @@ export function BranChatMainView({
         let aiResponse = '';
 
         try {
-          // Create a focused query for the AI that includes context
-          const contextualQuery = `Context: "${subChatParentMessage.content.substring(0, 200)}${subChatParentMessage.content.length > 200 ? '...' : ''}"\n\nSelected text: "${subChatSelectedText}"\n\nQuestion: ${content}`;
+          // Check if user is asking to answer questions from a document
+          const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(content);
+          
+          if (isAnswerQuestionsRequest && conversationId) {
+            // Use the conversation endpoint which has special handling for question extraction
+            console.log('📝 Detected question answering request in SubChat, using conversation endpoint');
+            
+            // Send to conversation endpoint which will extract and answer all questions
+            const response = await apiService.sendMessage(conversationId, content);
+            aiResponse = response.data.assistantMessage.content;
+          } else {
+            // Regular subchat query with context
+            let contextualQuery = `Context: "${subChatParentMessage.content.substring(0, 200)}${subChatParentMessage.content.length > 200 ? '...' : ''}"\n\nSelected text: "${subChatSelectedText}"\n\nQuestion: ${content}`;
 
-          const searchResult = await apiService.searchQuery(contextualQuery);
-          aiResponse = searchResult.response;
+            // Add document context if available
+            if (conversationId) {
+              try {
+                const { documentApi } = await import('../../lib/documentApi');
+                const relevantChunks = await documentApi.searchDocuments(content, conversationId, 5);
+                
+                if (relevantChunks.length > 0) {
+                  const documentContext = relevantChunks
+                    .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
+                    .join('\n\n---\n\n');
+                  
+                  contextualQuery = `${contextualQuery}\n\n--- Document Context ---\n${documentContext}`;
+                  console.log('📄 Added document context to SubChat query');
+                }
+              } catch (docError) {
+                console.error('Error searching documents for SubChat:', docError);
+              }
+            }
 
+            const searchResult = await apiService.searchQuery(contextualQuery);
+            aiResponse = searchResult.response;
+          }
 
         } catch (searchError) {
 
@@ -2199,6 +2229,7 @@ The specific approach depends on your particular use case and constraints.`;
           isMerging={isMerging}
           isReadOnly={isSubChatReadOnly}
           mergedSummary={subChatMergedSummary}
+          conversationId={conversationId}
         />
       )}
     </div>

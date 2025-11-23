@@ -19,6 +19,7 @@ interface BranChatSubChatProps {
   isMerging: boolean;
   isReadOnly?: boolean;
   mergedSummary?: string;
+  conversationId?: string;
 }
 
 export function BranChatSubChat({
@@ -35,7 +36,8 @@ export function BranChatSubChat({
   isLoading,
   isMerging,
   isReadOnly = false,
-  mergedSummary
+  mergedSummary,
+  conversationId
 }: BranChatSubChatProps) {
   const [subChatTitle, setSubChatTitle] = useState('SubChat');
   const [showFullContext, setShowFullContext] = useState(false);
@@ -248,6 +250,8 @@ export function BranChatSubChat({
                 selectedContext={selectedContext}
                 onClearContext={handleClearContext}
                 placeholder={selectedContext ? "Ask a question about the selected text..." : "Ask about the selected text or message context..."}
+                conversationId={conversationId}
+                voiceInputEnabled={true}
               />
             </div>
           )}
