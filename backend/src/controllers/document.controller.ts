@@ -13,19 +13,27 @@ export class DocumentController {
         return;
       }
 
+      const { conversationId } = req.body;
+      if (!conversationId) {
+        res.status(400).json({ error: 'conversationId is required' });
+        return;
+      }
+
       const userId = req.user?.userId || 'guest';
       
       logger.info('Processing uploaded file', {
         filename: req.file.originalname,
         size: req.file.size,
         mimetype: req.file.mimetype,
-        userId
+        userId,
+        conversationId
       });
 
       const processedDoc = await documentService.processFile(
         req.file.path,
         req.file.originalname,
-        userId
+        userId,
+        conversationId
       );
 
       res.json({
@@ -64,18 +72,22 @@ export class DocumentController {
    */
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { query, topK = 5 } = req.body;
+      const { query, conversationId, topK = 5 } = req.body;
 
       if (!query) {
         res.status(400).json({ error: 'Query is required' });
         return;
       }
 
-      const userId = req.user?.userId || 'guest';
-      const results = documentService.searchDocuments(query, userId, topK);
+      if (!conversationId) {
+        res.status(400).json({ error: 'conversationId is required' });
+        return;
+      }
+
+      const results = await documentService.searchDocuments(query, conversationId, topK);
 
       logger.info('Document search completed', {
-        userId,
+        conversationId,
         query,
         resultsCount: results.length
       });
@@ -107,12 +119,18 @@ export class DocumentController {
   }
 
   /**
-   * List user's documents
+   * List documents for a conversation
    */
   async list(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.userId || 'guest';
-      const documents = documentService.getUserDocuments(userId);
+      const { conversationId } = req.query;
+
+      if (!conversationId || typeof conversationId !== 'string') {
+        res.status(400).json({ error: 'conversationId is required' });
+        return;
+      }
+
+      const documents = await documentService.getConversationDocuments(conversationId);
 
       res.json({
         success: true,
@@ -148,7 +166,7 @@ export class DocumentController {
       const { documentId } = req.params;
       const userId = req.user?.userId || 'guest';
 
-      const deleted = documentService.deleteDocument(documentId, userId);
+      const deleted = await documentService.deleteDocument(documentId, userId);
 
       if (!deleted) {
         res.status(404).json({ error: 'Document not found' });
@@ -174,13 +192,18 @@ export class DocumentController {
   }
 
   /**
-   * Clear all documents for current user
+   * Clear all documents for a conversation
    */
   async clear(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.userId || 'guest';
+      const { conversationId } = req.body;
 
-      documentService.clearUserDocuments(userId);
+      if (!conversationId) {
+        res.status(400).json({ error: 'conversationId is required' });
+        return;
+      }
+
+      await documentService.clearConversationDocuments(conversationId);
 
       res.json({
         success: true,

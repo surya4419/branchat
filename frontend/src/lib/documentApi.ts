@@ -29,13 +29,13 @@ class DocumentApi {
   }
 
   /**
-   * Search within uploaded documents
+   * Search within uploaded documents for a specific conversation
    */
-  async searchDocuments(query: string, topK: number = 5): Promise<DocumentChunk[]> {
+  async searchDocuments(query: string, conversationId: string, topK: number = 5): Promise<DocumentChunk[]> {
     try {
       const response = await axios.post(
         `${API_URL}/api/documents/search`,
-        { query, topK },
+        { query, conversationId, topK },
         { headers: this.getHeaders() }
       );
       return response.data.results || [];
@@ -46,12 +46,12 @@ class DocumentApi {
   }
 
   /**
-   * List user's documents
+   * List documents for a specific conversation
    */
-  async listDocuments(): Promise<DocumentInfo[]> {
+  async listDocuments(conversationId: string): Promise<DocumentInfo[]> {
     try {
       const response = await axios.get(
-        `${API_URL}/api/documents/list`,
+        `${API_URL}/api/documents/list?conversationId=${conversationId}`,
         { headers: this.getHeaders() }
       );
       return response.data.documents || [];
@@ -79,10 +79,10 @@ class DocumentApi {
   /**
    * Enhance a chat message with document context
    */
-  async enhanceMessageWithDocuments(message: string): Promise<string> {
+  async enhanceMessageWithDocuments(message: string, conversationId: string): Promise<string> {
     try {
       // Search for relevant document chunks
-      const chunks = await this.searchDocuments(message, 3);
+      const chunks = await this.searchDocuments(message, conversationId, 3);
       
       if (chunks.length === 0) {
         return message;

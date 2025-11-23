@@ -20,6 +20,7 @@ interface BranChatComposerProps {
   requireAuth?: boolean;
   onAuthRequired?: () => void;
   voiceInputEnabled?: boolean;
+  conversationId?: string;
 }
 
 export function BranChatComposer({ 
@@ -38,7 +39,8 @@ export function BranChatComposer({
   onUploadStart,
   requireAuth = false,
   onAuthRequired,
-  voiceInputEnabled = false
+  voiceInputEnabled = false,
+  conversationId
 }: BranChatComposerProps) {
   const [message, setMessage] = useState(initialValue);
   const [isSearching, setIsSearching] = useState(false);
@@ -184,10 +186,10 @@ export function BranChatComposer({
         try {
           // For search mode, enhance with document context before sending to backend
           let searchQuery = message.trim();
-          if (attachedDocuments.length > 0) {
+          if (attachedDocuments.length > 0 && conversationId) {
             try {
               const { documentApi } = await import('../../lib/documentApi');
-              const relevantChunks = await documentApi.searchDocuments(message.trim(), 5);
+              const relevantChunks = await documentApi.searchDocuments(message.trim(), conversationId, 5);
               
               if (relevantChunks.length > 0) {
                 const documentContext = relevantChunks
@@ -287,6 +289,7 @@ export function BranChatComposer({
           isOpen={showFileUpload}
           onClose={() => setShowFileUpload(false)}
           onUploadComplete={handleFileUploadComplete}
+          conversationId={conversationId || ''}
         />
         {/* Selected Context Display */}
         {selectedContext && (

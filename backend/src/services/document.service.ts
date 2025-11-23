@@ -2,7 +2,9 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import Tesseract from 'tesseract.js';
 import ShortUniqueId from 'short-unique-id';
+import mongoose from 'mongoose';
 import { logger } from '../utils/logger';
+import { DocumentModel } from '../models/Document';
 
 // Import pdf-parse v2 API
 const { PDFParse } = require('pdf-parse');
@@ -31,8 +33,6 @@ export interface ProcessedDocument {
 
 class DocumentService {
   private uploadsDir = path.join(__dirname, '../../uploads');
-  private documentsStore: Map<string, ProcessedDocument> = new Map();
-  private userDocuments: Map<string, string[]> = new Map(); // userId -> documentIds[]
 
   constructor() {
     // Ensure uploads directory exists
@@ -132,12 +132,13 @@ class DocumentService {
   }
 
   /**
-   * Process uploaded file
+   * Process uploaded file and associate with conversation
    */
   async processFile(
     filePath: string,
     filename: string,
-    userId: string
+    userId: string,
+    conversationId: string
   ): Promise<ProcessedDocument> {
     try {
       const fileExt = path.extname(filename).toLowerCase();
@@ -168,51 +169,58 @@ class DocumentService {
         throw new Error('No text could be extracted from the file');
       }
 
-      // IMPORTANT: Clear old documents before adding new one
-      // This prevents document accumulation across uploads
-      logger.info('Clearing previous documents before adding new one', { userId });
-      this.clearUserDocuments(userId);
-
       // Chunk the text
       const textChunks = this.chunkText(extractedText, 1000);
       const documentId = uid.rnd();
 
       // Create document chunks
-      const chunks: DocumentChunk[] = textChunks.map((content, index) => ({
+      const chunks = textChunks.map((content, index) => ({
         id: `${documentId}_chunk_${index}`,
-        documentId,
-        filename,
         chunkIndex: index,
         content,
-        createdAt: new Date().toISOString()
       }));
 
-      // Create processed document
-      const processedDoc: ProcessedDocument = {
-        id: documentId,
+      // Save to MongoDB associated with conversation
+      const userIdValue = userId.startsWith('guest_') ? userId : new mongoose.Types.ObjectId(userId);
+      
+      const document = new DocumentModel({
+        conversationId: new mongoose.Types.ObjectId(conversationId),
+        userId: userIdValue,
         filename,
         fileType: fileExt,
+        extractedText,
         chunks,
         totalChunks: chunks.length,
-        extractedText,
-        processedAt: new Date().toISOString()
-      };
+      });
 
-      // Store document
-      this.documentsStore.set(documentId, processedDoc);
-
-      // Associate with user (now only this document)
-      this.userDocuments.set(userId, [documentId]);
+      await document.save();
 
       // Clean up uploaded file
       await fs.remove(filePath);
 
-      logger.info('Document processed successfully', {
-        documentId,
+      logger.info('Document processed and saved to MongoDB', {
+        documentId: document.id,
+        conversationId,
         filename,
         chunks: chunks.length,
         textLength: extractedText.length
       });
+
+      // Return in the expected format
+      const processedDoc: ProcessedDocument = {
+        id: document.id,
+        filename: document.filename,
+        fileType: document.fileType,
+        chunks: document.chunks.map(c => ({
+          ...c,
+          documentId: document.id,
+          filename: document.filename,
+          createdAt: document.createdAt.toISOString(),
+        })),
+        totalChunks: document.totalChunks,
+        extractedText: document.extractedText,
+        processedAt: document.createdAt.toISOString(),
+      };
 
       return processedDoc;
     } catch (error) {
@@ -224,87 +232,195 @@ class DocumentService {
 
   /**
    * Search documents using simple keyword matching
+   * Only searches within a specific conversation
    */
-  searchDocuments(query: string, userId: string, topK: number = 5): DocumentChunk[] {
-    const userDocs = this.userDocuments.get(userId) || [];
-    const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 2);
-    
-    const scoredChunks: Array<{ chunk: DocumentChunk; score: number }> = [];
+  async searchDocuments(query: string, conversationId: string, topK: number = 5): Promise<DocumentChunk[]> {
+    try {
+      const documents = await DocumentModel.findByConversationId(conversationId);
+      const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 2);
+      
+      const scoredChunks: Array<{ chunk: DocumentChunk; score: number }> = [];
 
-    for (const docId of userDocs) {
-      const doc = this.documentsStore.get(docId);
-      if (!doc) continue;
+      for (const doc of documents) {
+        for (const chunk of doc.chunks) {
+          const content = chunk.content.toLowerCase();
+          let score = 0;
 
-      for (const chunk of doc.chunks) {
-        const content = chunk.content.toLowerCase();
-        let score = 0;
+          // Count keyword matches
+          for (const keyword of keywords) {
+            const matches = (content.match(new RegExp(keyword, 'g')) || []).length;
+            score += matches;
+          }
 
-        // Count keyword matches
-        for (const keyword of keywords) {
-          const matches = (content.match(new RegExp(keyword, 'g')) || []).length;
-          score += matches;
-        }
-
-        if (score > 0) {
-          scoredChunks.push({ chunk, score });
+          if (score > 0) {
+            scoredChunks.push({ 
+              chunk: {
+                id: chunk.id,
+                documentId: doc.id,
+                filename: doc.filename,
+                chunkIndex: chunk.chunkIndex,
+                content: chunk.content,
+                pageNumber: chunk.pageNumber,
+                createdAt: doc.createdAt.toISOString(),
+              }, 
+              score 
+            });
+          }
         }
       }
-    }
 
-    // Sort by score and return top K
-    return scoredChunks
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .map(item => item.chunk);
+      // Sort by score and return top K
+      return scoredChunks
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topK)
+        .map(item => item.chunk);
+    } catch (error) {
+      logger.error('Document search error', { error, conversationId });
+      return [];
+    }
   }
 
   /**
-   * Get user's documents
+   * Search documents across all user's conversations (for "use previous knowledge")
    */
-  getUserDocuments(userId: string): ProcessedDocument[] {
-    const userDocs = this.userDocuments.get(userId) || [];
-    return userDocs
-      .map(docId => this.documentsStore.get(docId))
-      .filter((doc): doc is ProcessedDocument => doc !== undefined);
+  async searchAllUserDocuments(query: string, userId: string, topK: number = 5): Promise<DocumentChunk[]> {
+    try {
+      const documents = await DocumentModel.findByUserId(userId);
+      const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 2);
+      
+      const scoredChunks: Array<{ chunk: DocumentChunk; score: number }> = [];
+
+      for (const doc of documents) {
+        for (const chunk of doc.chunks) {
+          const content = chunk.content.toLowerCase();
+          let score = 0;
+
+          // Count keyword matches
+          for (const keyword of keywords) {
+            const matches = (content.match(new RegExp(keyword, 'g')) || []).length;
+            score += matches;
+          }
+
+          if (score > 0) {
+            scoredChunks.push({ 
+              chunk: {
+                id: chunk.id,
+                documentId: doc.id,
+                filename: doc.filename,
+                chunkIndex: chunk.chunkIndex,
+                content: chunk.content,
+                pageNumber: chunk.pageNumber,
+                createdAt: doc.createdAt.toISOString(),
+              }, 
+              score 
+            });
+          }
+        }
+      }
+
+      // Sort by score and return top K
+      return scoredChunks
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topK)
+        .map(item => item.chunk);
+    } catch (error) {
+      logger.error('User documents search error', { error, userId });
+      return [];
+    }
+  }
+
+  /**
+   * Get documents for a specific conversation
+   */
+  async getConversationDocuments(conversationId: string): Promise<ProcessedDocument[]> {
+    try {
+      const documents = await DocumentModel.findByConversationId(conversationId);
+      
+      return documents.map(doc => ({
+        id: doc.id,
+        filename: doc.filename,
+        fileType: doc.fileType,
+        chunks: doc.chunks.map(c => ({
+          id: c.id,
+          documentId: doc.id,
+          filename: doc.filename,
+          chunkIndex: c.chunkIndex,
+          content: c.content,
+          pageNumber: c.pageNumber,
+          createdAt: doc.createdAt.toISOString(),
+        })),
+        totalChunks: doc.totalChunks,
+        extractedText: doc.extractedText,
+        processedAt: doc.createdAt.toISOString(),
+      }));
+    } catch (error) {
+      logger.error('Get conversation documents error', { error, conversationId });
+      return [];
+    }
+  }
+
+  /**
+   * Get all user's documents (across all conversations)
+   */
+  async getUserDocuments(userId: string): Promise<ProcessedDocument[]> {
+    try {
+      const documents = await DocumentModel.findByUserId(userId);
+      
+      return documents.map(doc => ({
+        id: doc.id,
+        filename: doc.filename,
+        fileType: doc.fileType,
+        chunks: doc.chunks.map(c => ({
+          id: c.id,
+          documentId: doc.id,
+          filename: doc.filename,
+          chunkIndex: c.chunkIndex,
+          content: c.content,
+          pageNumber: c.pageNumber,
+          createdAt: doc.createdAt.toISOString(),
+        })),
+        totalChunks: doc.totalChunks,
+        extractedText: doc.extractedText,
+        processedAt: doc.createdAt.toISOString(),
+      }));
+    } catch (error) {
+      logger.error('Get user documents error', { error, userId });
+      return [];
+    }
   }
 
   /**
    * Delete document
    */
-  deleteDocument(documentId: string, userId: string): boolean {
-    const userDocs = this.userDocuments.get(userId) || [];
-    const docIndex = userDocs.indexOf(documentId);
-    
-    if (docIndex === -1) {
+  async deleteDocument(documentId: string, userId: string): Promise<boolean> {
+    try {
+      const userIdValue = userId.startsWith('guest_') ? userId : new mongoose.Types.ObjectId(userId);
+      const result = await DocumentModel.deleteOne({
+        _id: new mongoose.Types.ObjectId(documentId),
+        userId: userIdValue,
+      });
+
+      logger.info('Document deleted', { documentId, userId, deleted: result.deletedCount });
+      return result.deletedCount > 0;
+    } catch (error) {
+      logger.error('Delete document error', { error, documentId, userId });
       return false;
     }
-
-    // Remove from user's documents
-    userDocs.splice(docIndex, 1);
-    this.userDocuments.set(userId, userDocs);
-
-    // Remove from store
-    this.documentsStore.delete(documentId);
-
-    logger.info('Document deleted', { documentId, userId });
-    return true;
   }
 
   /**
-   * Clear all documents for a user
+   * Clear all documents for a conversation
    */
-  clearUserDocuments(userId: string): void {
-    const userDocs = this.userDocuments.get(userId) || [];
-    
-    // Remove all documents from store
-    userDocs.forEach(docId => {
-      this.documentsStore.delete(docId);
-    });
-    
-    // Clear user's document list
-    this.userDocuments.set(userId, []);
-    
-    logger.info('Cleared all documents for user', { userId, count: userDocs.length });
+  async clearConversationDocuments(conversationId: string): Promise<void> {
+    try {
+      const result = await DocumentModel.deleteMany({
+        conversationId: new mongoose.Types.ObjectId(conversationId),
+      });
+      
+      logger.info('Cleared all documents for conversation', { conversationId, count: result.deletedCount });
+    } catch (error) {
+      logger.error('Clear conversation documents error', { error, conversationId });
+    }
   }
 }
 

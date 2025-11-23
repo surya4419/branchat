@@ -159,6 +159,7 @@ export class AIController {
       let documentContext = '';
 
       // If document search is enabled, search for relevant chunks
+      // Note: This search endpoint doesn't have conversationId, so it searches across all user documents
       if (useDocuments) {
         try {
           const { documentService } = await import('../services/document.service');
@@ -168,8 +169,8 @@ export class AIController {
           const isAnswerQuestionsRequest = /answer.*question|give.*answer|provide.*answer|solve.*question/i.test(query);
           
           if (isAnswerQuestionsRequest) {
-            // Get ALL document content (not just top 3 chunks)
-            const userDocs = documentService.getUserDocuments(userId);
+            // Get ALL user's documents (across all conversations)
+            const userDocs = await documentService.getUserDocuments(userId);
             
             if (userDocs.length > 0) {
               // Get the full text from the most recent document
@@ -194,8 +195,8 @@ Instructions:
 Please provide detailed answers to all the questions found in the document.`;
             }
           } else {
-            // Normal document search for context
-            const relevantChunks = documentService.searchDocuments(query, userId, 3);
+            // Normal document search for context - search across all user's documents
+            const relevantChunks = await documentService.searchAllUserDocuments(query, userId, 3);
 
             if (relevantChunks.length > 0) {
               documentContext = relevantChunks

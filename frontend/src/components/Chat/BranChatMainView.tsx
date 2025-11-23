@@ -2043,6 +2043,7 @@ The specific approach depends on your particular use case and constraints.`;
                       setShowLoginModal(true);
                     }}
                     voiceInputEnabled={conversation?.voice_input_enabled || false}
+                    conversationId={conversationId}
                     placeholder={showKnowledgeToggle ? "Choose how to continue above..." : (selectedContext ? "Ask a question about the selected text..." : (messages.length > 0 ? (conversation?.use_previous_knowledge ? "Continue with full context + previous knowledge..." : (mergedSubChatHistories.length > 0 ? "Continue with full context + SubChat insights..." : "Continue the conversation (I remember everything)...")) : "Ask branchat"))}
                   />
                 </div>

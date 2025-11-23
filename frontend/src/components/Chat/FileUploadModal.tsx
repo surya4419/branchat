@@ -7,6 +7,7 @@ interface FileUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadComplete: (documentId: string, filename: string) => void;
+  conversationId: string;
 }
 
 interface UploadedFile {
@@ -17,7 +18,7 @@ interface UploadedFile {
   documentId?: string;
 }
 
-export function FileUploadModal({ isOpen, onClose, onUploadComplete }: FileUploadModalProps) {
+export function FileUploadModal({ isOpen, onClose, onUploadComplete, conversationId }: FileUploadModalProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -46,6 +47,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadComplete }: FileUploa
 
     const formData = new FormData();
     formData.append('file', uploadedFile.file);
+    formData.append('conversationId', conversationId);
 
     try {
       // Update status to uploading
