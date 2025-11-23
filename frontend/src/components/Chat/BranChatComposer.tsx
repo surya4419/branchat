@@ -153,11 +153,6 @@ export function BranChatComposer({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Stop recording if active
-    if (isRecording) {
-      stopRecording();
-    }
-    
     // Check if authentication is required
     if (requireAuth && onAuthRequired) {
       onAuthRequired();
@@ -165,14 +160,32 @@ export function BranChatComposer({
     }
     
     if (message.trim() && !disabled && !isSearching) {
+      // Store the message before stopping recording
+      const messageToProcess = message.trim();
+      
+      // Stop recording if active (do this AFTER capturing the message)
+      if (isRecording) {
+        stopRecording();
+      }
       // Create display message (what user sees in chat)
-      let displayMessage = message.trim();
+      let displayMessage = messageToProcess;
       
       // Add document reference to display message if documents attached
       if (attachedDocuments.length > 0) {
         const docNames = attachedDocuments.map(doc => doc.filename).join(', ');
-        displayMessage = `${message.trim()}\n\n📎 Attached: ${docNames}`;
+        displayMessage = `${messageToProcess}\n\n📎 Attached: ${docNames}`;
         console.log('📤 Sending message with', attachedDocuments.length, 'attached document(s):', attachedDocuments);
+      }
+      
+      // Clear message IMMEDIATELY to prevent voice input from re-populating it
+      setMessage('');
+      setLastSentMessage(messageToProcess);
+      setShouldClearMessage(true);
+      
+      // Force clear the textarea immediately
+      if (textareaRef.current) {
+        textareaRef.current.value = '';
+        textareaRef.current.style.height = 'auto';
       }
       
       // Combine selected context with display message if context exists
@@ -183,20 +196,8 @@ export function BranChatComposer({
       if (isSearchMode && onSearch) {
         // Handle search mode
         setIsSearching(true);
-        
-        // Store the sent message for voice input tracking
-        setLastSentMessage(message.trim());
-        
-        // Clear message IMMEDIATELY before search to prevent it from staying
-        setMessage('');
         onClearContext?.();
         setAttachedDocuments([]);
-        
-        // Force clear the textarea immediately
-        if (textareaRef.current) {
-          textareaRef.current.value = '';
-          textareaRef.current.style.height = 'auto';
-        }
         
         try {
           // For search mode, enhance with document context before sending to backend
@@ -204,14 +205,14 @@ export function BranChatComposer({
           if (attachedDocuments.length > 0 && conversationId) {
             try {
               const { documentApi } = await import('../../lib/documentApi');
-              const relevantChunks = await documentApi.searchDocuments(message.trim(), conversationId, 5);
+              const relevantChunks = await documentApi.searchDocuments(messageToProcess, conversationId, 5);
               
               if (relevantChunks.length > 0) {
                 const documentContext = relevantChunks
                   .map((chunk, index) => `[Document ${index + 1}: ${chunk.filename}]\n${chunk.content}`)
                   .join('\n\n---\n\n');
                 
-                searchQuery = `${message.trim()}\n\n--- Document Context ---\n${documentContext}`;
+                searchQuery = `${messageToProcess}\n\n--- Document Context ---\n${documentContext}`;
               }
             } catch (error) {
               console.error('Error searching documents:', error);
@@ -223,36 +224,19 @@ export function BranChatComposer({
           console.error('Search error:', error);
         } finally {
           setIsSearching(false);
+          // Reset the flag after search completes
+          setTimeout(() => {
+            setShouldClearMessage(false);
+          }, 100);
         }
       } else {
         // Handle regular message sending
-        
-        // Note: Document context is handled automatically by the backend
-        // We just need to send the clean message
-        const messageToSend = displayMessage;
-        
-        // Store the sent message
-        setLastSentMessage(messageToSend);
-        
-        // Set flag to prevent initialValue from resetting the message
-        setShouldClearMessage(true);
-        
-        // Clear message BEFORE sending to prevent any race conditions
-        setMessage('');
         onClearContext?.();
-        
-        // Clear attached documents after sending
         setAttachedDocuments([]);
-        
-        // Force clear the textarea immediately
-        if (textareaRef.current) {
-          textareaRef.current.value = '';
-          textareaRef.current.style.height = 'auto';
-        }
         
         // Send the clean display message
         // Backend will automatically add document context if documents are uploaded
-        onSend(messageToSend);
+        onSend(displayMessage);
         
         // Reset the flag after a short delay
         setTimeout(() => {

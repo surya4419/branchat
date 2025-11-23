@@ -9,6 +9,7 @@ export function useVoiceInput({ onTranscript, onError }: UseVoiceInputProps) {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef<string>('');
+  const isStoppedRef = useRef<boolean>(false);
 
   const startRecording = useCallback(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -24,14 +25,20 @@ export function useVoiceInput({ onTranscript, onError }: UseVoiceInputProps) {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    // Reset transcript
+    // Reset transcript and stopped flag
     finalTranscriptRef.current = '';
+    isStoppedRef.current = false;
 
     recognition.onstart = () => {
       setIsRecording(true);
     };
 
     recognition.onresult = (event: any) => {
+      // Don't process results if recording was stopped
+      if (isStoppedRef.current) {
+        return;
+      }
+      
       let interimTranscript = '';
       let finalTranscript = '';
       
@@ -73,8 +80,8 @@ export function useVoiceInput({ onTranscript, onError }: UseVoiceInputProps) {
     recognition.onend = () => {
       setIsRecording(false);
       
-      // Send final transcript one last time
-      if (finalTranscriptRef.current.trim()) {
+      // Only send final transcript if not manually stopped
+      if (!isStoppedRef.current && finalTranscriptRef.current.trim()) {
         onTranscript(finalTranscriptRef.current.trim());
       }
     };
@@ -89,6 +96,9 @@ export function useVoiceInput({ onTranscript, onError }: UseVoiceInputProps) {
   }, [onTranscript, onError]);
 
   const stopRecording = useCallback(() => {
+    // Mark as stopped to prevent further transcript updates
+    isStoppedRef.current = true;
+    
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
