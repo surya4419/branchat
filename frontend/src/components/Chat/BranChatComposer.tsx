@@ -183,9 +183,24 @@ export function BranChatComposer({
       if (isSearchMode && onSearch) {
         // Handle search mode
         setIsSearching(true);
+        
+        // Store the sent message for voice input tracking
+        setLastSentMessage(message.trim());
+        
+        // Clear message IMMEDIATELY before search to prevent it from staying
+        setMessage('');
+        onClearContext?.();
+        setAttachedDocuments([]);
+        
+        // Force clear the textarea immediately
+        if (textareaRef.current) {
+          textareaRef.current.value = '';
+          textareaRef.current.style.height = 'auto';
+        }
+        
         try {
           // For search mode, enhance with document context before sending to backend
-          let searchQuery = message.trim();
+          let searchQuery = displayMessage;
           if (attachedDocuments.length > 0 && conversationId) {
             try {
               const { documentApi } = await import('../../lib/documentApi');
@@ -204,15 +219,6 @@ export function BranChatComposer({
           }
           
           await onSearch(searchQuery);
-          // Clear message
-          setMessage('');
-          onClearContext?.();
-          setAttachedDocuments([]);
-          
-          // Force clear the textarea
-          if (textareaRef.current) {
-            textareaRef.current.value = '';
-          }
         } catch (error) {
           console.error('Search error:', error);
         } finally {
